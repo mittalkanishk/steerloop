@@ -77,12 +77,14 @@ func script(name string) string { return "script:" + testdata + name }
 
 var (
 	timestampRE = regexp.MustCompile(`"timestamp":"[^"]+"`)
-	durationRE  = regexp.MustCompile(`"duration_ms":\d+`)
+	// A tool result omits duration_ms when the tool finishes within a
+	// millisecond, so the field is dropped rather than zeroed.
+	durationRE = regexp.MustCompile(`,"duration_ms":\d+`)
 )
 
 func normalise(jsonl string) string {
 	jsonl = timestampRE.ReplaceAllString(jsonl, `"timestamp":"T"`)
-	return durationRE.ReplaceAllString(jsonl, `"duration_ms":0`)
+	return durationRE.ReplaceAllString(jsonl, "")
 }
 
 func checkGolden(t *testing.T, name, got string) {
