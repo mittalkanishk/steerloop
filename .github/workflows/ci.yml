@@ -20,6 +20,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
+          check-latest: true
 
       - name: Format
         run: test -z "$(gofmt -l .)"
@@ -27,7 +28,9 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      # The released staticcheck cannot yet read export data from the newest Go.
       - name: Staticcheck
+        if: matrix.go != 'stable'
         run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
 
       - name: Test
