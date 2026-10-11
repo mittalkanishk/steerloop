@@ -1,0 +1,8 @@
+{"type":"run","iteration":0,"timestamp":"T","data":{"version":"(devel)","model":"script:../../testdata/tool_then_answer.json","stop":"no-tool-calls","max_iterations":12,"tools":["say","count_lines","danger","nap"],"prompt":"hi"}}
+{"type":"thinking","iteration":1,"timestamp":"T","data":{"message":"Reasoning (step 1/12)…"}}
+{"type":"llm_turn","iteration":1,"timestamp":"T","data":{"turn_index":1,"input_tokens":120,"output_tokens":18,"cost_amount":0,"provider":"script","model":"tool_then_answer.json","duration_ms":0,"request":{"messages":[{"role":"user","content":"hi"}]},"response_kind":"tool_calls","assistant_tool_calls":[{"id":"call_1","type":"function","function":{"name":"say","arguments":"{\"message\":\"hello from the tool\"}"}}]}}
+{"type":"tool_call","iteration":1,"timestamp":"T","data":{"tool_call_id":"call_1","name":"say","arguments":"{\"message\":\"hello from the tool\"}"}}
+{"type":"tool_result","iteration":1,"timestamp":"T","data":{"tool_call_id":"call_1","name":"say","result":"hello from the tool\n","duration_ms":0}}
+{"type":"thinking","iteration":2,"timestamp":"T","data":{"message":"Reasoning (step 2/12)…"}}
+{"type":"response","iteration":2,"timestamp":"T","data":{"content":"The tool printed: hello from the tool"}}
+{"type":"done","iteration":2,"timestamp":"T","data":{"reason":"finished","iterations":2,"final_content":"The tool printed: hello from the tool","llm_usage":{"input_tokens":280,"output_tokens":30,"total_tokens":310}}}

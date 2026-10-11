@@ -1,0 +1,18 @@
+# Changelog
+
+## Unreleased
+
+First public version.
+
+### Library
+
+- `Loop` with stop, inject and modify-config controls, a typed event stream, pause tools, retry on transient model failure, a stream idle watchdog and per-turn audit events.
+- `Registry[K]` for finding running loops by key.
+- `Loop.Result` returns the outcome without reading the event channel.
+- `steerlooptest`: a scripted chat model, a JSON script format and a recording tool executor.
+
+### CLI
+
+- `steerloop run` with manifest-declared command-line tools, live steering from the terminal or a control file, `ask_user`, tool confirmation, text and JSONL output, and recording.
+- `steerloop replay` re-renders a recording.
+- `steerloop tools validate` checks a manifest.

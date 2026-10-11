@@ -1,0 +1,6 @@
+/steerloop
+/dist/
+*.test
+*.out
+.env
+.DS_Store

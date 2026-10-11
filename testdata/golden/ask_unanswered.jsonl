@@ -1,0 +1,6 @@
+{"type":"run","iteration":0,"timestamp":"T","data":{"version":"(devel)","model":"script:../../testdata/ask_user.json","stop":"no-tool-calls","max_iterations":12,"tools":["ask_user"],"prompt":"pick"}}
+{"type":"thinking","iteration":1,"timestamp":"T","data":{"message":"Reasoning (step 1/12)…"}}
+{"type":"llm_turn","iteration":1,"timestamp":"T","data":{"turn_index":1,"input_tokens":0,"output_tokens":0,"cost_amount":0,"provider":"script","model":"ask_user.json","duration_ms":0,"request":{"messages":[{"role":"user","content":"pick"}]},"response_kind":"tool_calls","assistant_tool_calls":[{"id":"call_1","type":"function","function":{"name":"ask_user","arguments":"{\"question\":\"Which colour?\",\"options\":[\"red\",\"blue\"]}"}}]}}
+{"type":"tool_call","iteration":1,"timestamp":"T","data":{"tool_call_id":"call_1","name":"ask_user","arguments":"{\"question\":\"Which colour?\",\"options\":[\"red\",\"blue\"]}"}}
+{"type":"awaiting_input","iteration":1,"timestamp":"T","data":{"question":"Which colour?","options":["red","blue"]}}
+{"type":"done","iteration":1,"timestamp":"T","data":{"reason":"awaiting_human","iterations":1,"final_content":"Which colour?","awaiting":{"question":"Which colour?","options":["red","blue"]},"llm_usage":{"input_tokens":0,"output_tokens":0,"total_tokens":0}}}

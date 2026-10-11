@@ -1,0 +1,4 @@
+{"type":"run","iteration":0,"timestamp":"T","data":{"version":"(devel)","model":"script:../../testdata/model_error.json","stop":"no-tool-calls","max_iterations":12,"tools":null,"prompt":"hi"}}
+{"type":"thinking","iteration":1,"timestamp":"T","data":{"message":"Reasoning (step 1/12)…"}}
+{"type":"error","iteration":1,"timestamp":"T","data":{"error":"401 invalid api key","fatal":true}}
+{"type":"done","iteration":1,"timestamp":"T","data":{"reason":"error","iterations":1,"error":"401 invalid api key","llm_usage":{"input_tokens":0,"output_tokens":0,"total_tokens":0}}}

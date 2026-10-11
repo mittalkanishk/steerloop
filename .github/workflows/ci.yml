@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ["1.26.x", "stable"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+
+      - name: Format
+        run: test -z "$(gofmt -l .)"
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+
+      - name: Test
+        run: go test -race -count=1 -coverprofile=coverage.out ./...
+
+      - name: Coverage gate (library, 85%)
+        run: |
+          go test -count=1 -coverprofile=lib.out .
+          total=$(go tool cover -func=lib.out | awk '/^total:/ {print substr($3, 1, length($3)-1)}')
+          echo "library coverage: ${total}%"
+          awk -v t="$total" 'BEGIN { exit (t >= 85.0) ? 0 : 1 }'
+
+      - name: Fuzz (30s)
+        run: |
+          go test -run '^$' -fuzz FuzzNewToolInfo -fuzztime 15s .
+          go test -run '^$' -fuzz FuzzSerializeEinoMessagesForAudit -fuzztime 15s .
+
+      - name: Vulnerability check
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
