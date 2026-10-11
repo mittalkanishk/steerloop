@@ -11,7 +11,7 @@ import (
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/components/model"
 
-	"github.com/Kanishkmittal55/steerloop/steerlooptest"
+	"github.com/mittalkanishk/steerloop/steerlooptest"
 )
 
 // Model is a chat model with the names used to label it in events.

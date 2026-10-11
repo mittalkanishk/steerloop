@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Kanishkmittal55/steerloop"
+	"github.com/mittalkanishk/steerloop"
 )
 
 // record is one line of JSONL output: an event, or the "run" header line.

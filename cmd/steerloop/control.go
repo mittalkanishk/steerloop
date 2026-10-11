@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Kanishkmittal55/steerloop"
+	"github.com/mittalkanishk/steerloop"
 )
 
 // controller applies steering input to a running loop.

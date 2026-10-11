@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## v0.1.1
+
+- The module path is now `github.com/mittalkanishk/steerloop`. v0.1.0 was published as `github.com/Kanishkmittal55/steerloop`; update imports when upgrading.
+
+## v0.1.0
 
 First public version.
 

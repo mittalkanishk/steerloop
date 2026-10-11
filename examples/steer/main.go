@@ -11,8 +11,8 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
-	"github.com/Kanishkmittal55/steerloop"
-	"github.com/Kanishkmittal55/steerloop/steerlooptest"
+	"github.com/mittalkanishk/steerloop"
+	"github.com/mittalkanishk/steerloop/steerlooptest"
 )
 
 func main() {

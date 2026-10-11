@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/Kanishkmittal55/steerloop/steerlooptest"
+	"github.com/mittalkanishk/steerloop/steerlooptest"
 )
 
 // A reader that starts late still receives the done event, even though the

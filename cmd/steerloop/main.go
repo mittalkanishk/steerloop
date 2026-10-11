@@ -11,7 +11,7 @@ import (
 	"runtime/debug"
 	"syscall"
 
-	"github.com/Kanishkmittal55/steerloop/internal/exectool"
+	"github.com/mittalkanishk/steerloop/internal/exectool"
 )
 
 // Exit codes.

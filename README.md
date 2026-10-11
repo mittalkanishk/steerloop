@@ -17,8 +17,8 @@ Status: v0. The API may change before v1.
 ## Install
 
 ```sh
-go get github.com/Kanishkmittal55/steerloop                              # library
-go install github.com/Kanishkmittal55/steerloop/cmd/steerloop@latest     # CLI
+go get github.com/mittalkanishk/steerloop                              # library
+go install github.com/mittalkanishk/steerloop/cmd/steerloop@latest     # CLI
 ```
 
 Requires Go 1.26 or later.

@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/Kanishkmittal55/steerloop/steerlooptest"
+	"github.com/mittalkanishk/steerloop/steerlooptest"
 )
 
 func TestRegistry_Lifecycle(t *testing.T) {

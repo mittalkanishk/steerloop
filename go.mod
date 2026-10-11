@@ -1,4 +1,4 @@
-module github.com/Kanishkmittal55/steerloop
+module github.com/mittalkanishk/steerloop
 
 go 1.26.0
 

@@ -14,7 +14,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"gopkg.in/yaml.v3"
 
-	"github.com/Kanishkmittal55/steerloop"
+	"github.com/mittalkanishk/steerloop"
 )
 
 const (

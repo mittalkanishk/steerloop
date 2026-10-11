@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Kanishkmittal55/steerloop"
+	"github.com/mittalkanishk/steerloop"
 )
 
 // replayCommand re-renders a recording. It makes no model call and runs no
