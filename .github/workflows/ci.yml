@@ -23,16 +23,15 @@ jobs:
           go-version: ${{ matrix.go }}
           check-latest: true
 
-      - name: Format
-        run: test -z "$(gofmt -l .)"
-
       - name: Vet
         run: go vet ./...
 
-      # The released staticcheck cannot yet read export data from the newest Go.
-      - name: Staticcheck
+      # staticcheck, via golangci-lint, cannot yet read export data from the newest Go.
+      - name: Lint
         if: matrix.go != 'stable'
-        run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.9.0
 
       - name: Test
         run: go test -race -count=1 -coverprofile=coverage.out ./...

@@ -1,0 +1,25 @@
+version: "2"
+linters:
+  default: none
+  enable:
+    - errcheck
+    - gocheckcompilerdirectives
+    - govet
+    - ineffassign
+    - nilerr
+    - rowserrcheck
+    - staticcheck
+    - tparallel
+    - unused
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+formatters:
+  enable:
+    - goimports
+  exclusions:
+    generated: lax

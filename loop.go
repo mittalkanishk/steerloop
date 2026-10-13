@@ -98,9 +98,9 @@ func New(cfg LoopConfig, llm model.ToolCallingChatModel, tools []*schema.ToolInf
 // slice, so the caller's slice is never appended to. A second call returns a
 // channel holding one fatal error.
 func (l *Loop) Start(ctx context.Context, startingMessages []*schema.Message) <-chan Event {
-	
+
 	l.mu.Lock()
-	
+
 	if l.state != StateIdle {
 		l.mu.Unlock()
 		return failedStart("loop already started")
@@ -110,13 +110,13 @@ func (l *Loop) Start(ctx context.Context, startingMessages []*schema.Message) <-
 
 	l.startingMessages = make([]*schema.Message, len(startingMessages))
 	copy(l.startingMessages, startingMessages)
-	
+
 	l.runningMessages = make([]*schema.Message, len(startingMessages))
 	copy(l.runningMessages, startingMessages)
-	
+
 	seed := make([]*schema.Message, len(startingMessages))
 	copy(seed, startingMessages)
-	
+
 	l.logged = len(l.runningMessages)
 	l.mu.Unlock()
 
@@ -130,9 +130,9 @@ func (l *Loop) Start(ctx context.Context, startingMessages []*schema.Message) <-
 }
 
 func failedStart(msg string) <-chan Event {
-	
+
 	errCh := make(chan Event, 1)
-	
+
 	errCh <- Event{
 		Type:      EventError,
 		Data:      ErrorData{Error: msg, Fatal: true},
@@ -140,7 +140,7 @@ func failedStart(msg string) <-chan Event {
 	}
 
 	close(errCh)
-	
+
 	return errCh
 }
 
@@ -149,7 +149,7 @@ func (l *Loop) run(ctx context.Context) {
 
 	var totalCtx context.Context
 	var totalCancel context.CancelFunc
-	
+
 	if l.cfg.TotalTimeout > 0 {
 		totalCtx, totalCancel = context.WithTimeout(ctx, l.cfg.TotalTimeout)
 	} else {
