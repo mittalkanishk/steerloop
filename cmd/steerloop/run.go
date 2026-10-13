@@ -93,6 +93,7 @@ func runCommand(e env, args []string) int {
 		prompt = strings.TrimSpace(string(data))
 		promptFromStdin = true
 	}
+	
 	if prompt == "" {
 		return fail("a prompt is required, as an argument or on stdin")
 	}

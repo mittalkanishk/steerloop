@@ -24,7 +24,7 @@ func (l *Loop) callModel(totalCtx context.Context, m model.ToolCallingChatModel,
 	attempts := 1 + l.effectiveRetryAttempts()
 
 	var lastErr error
-	for attempt := 0; attempt < attempts; attempt++ {
+	for attempt := range attempts {
 		if attempt > 0 {
 			// Back off briefly so a flaky provider is not hammered.
 			backoff := time.Duration(500*attempt) * time.Millisecond
