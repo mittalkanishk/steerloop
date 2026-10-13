@@ -1,6 +1,10 @@
 package steerloop
 
-import "time"
+import (
+	"context"
+	"log/slog"
+	"time"
+)
 
 // EventType classifies an event.
 type EventType string
@@ -36,6 +40,10 @@ type Event struct {
 	Iteration int       `json:"iteration"`
 	Timestamp time.Time `json:"timestamp"`
 }
+
+// EventSink receives every event the loop emits, synchronously, before the
+// event is offered to the event channel. It must not block for long.
+type EventSink func(ctx context.Context, evt Event)
 
 // ThinkingData is the payload of EventThinking.
 type ThinkingData struct {
@@ -146,4 +154,101 @@ type DoneData struct {
 	// channel was full.
 	DroppedEvents int             `json:"dropped_events,omitempty"`
 	LLMUsage      LLMUsageSummary `json:"llm_usage"`
+}
+
+// emitEvent offers an intermediate event to the sink and the event channel.
+// When the channel is full the event is dropped and counted.
+func (l *Loop) emitEvent(t EventType, data any) {
+	if !l.cfg.StreamEvents && t != EventDone && t != EventError {
+		return
+	}
+
+	evt := Event{
+		Type:      t,
+		Data:      data,
+		Iteration: l.GetCurrentIteration(),
+		Timestamp: time.Now().UTC(),
+	}
+
+	l.evMu.RLock()
+	defer l.evMu.RUnlock()
+	if l.eventClosed {
+		return
+	}
+	if l.cfg.EventSink != nil {
+		l.cfg.EventSink(context.Background(), evt)
+	}
+
+	select {
+	case l.eventCh <- evt:
+	default:
+		l.dropped.Add(1)
+		l.logger.Warn("agent loop event channel full, dropping event",
+			slog.String("type", string(t)), slog.Int("iteration", evt.Iteration))
+	}
+}
+
+func (l *Loop) emitDone(reason DoneReason, finalContent string) {
+	l.deliverDone(DoneData{Reason: reason, FinalContent: finalContent})
+}
+
+func (l *Loop) emitDoneAwaiting(awaiting *AwaitingInputData) {
+	l.deliverDone(DoneData{
+		Reason:       DoneReasonAwaitingHuman,
+		FinalContent: awaiting.Question,
+		Awaiting:     awaiting,
+	})
+}
+
+// deliverDone records the outcome and sends the done event. Only the first
+// call has any effect, so a run has exactly one outcome. Unlike intermediate
+// events the done event is not dropped when the channel is full: the send
+// waits for a reader, up to DoneDeliveryGrace.
+func (l *Loop) deliverDone(done DoneData) {
+	l.doneOnce.Do(func() {
+		l.mu.Lock()
+		done.Iterations = l.iteration
+		done.LLMUsage = l.usage.summary()
+		done.DroppedEvents = int(l.dropped.Load())
+		if done.Reason == DoneReasonError {
+			done.Error = l.lastError
+		}
+		l.result = done
+		l.hasResult = true
+		l.mu.Unlock()
+
+		evt := Event{
+			Type:      EventDone,
+			Data:      done,
+			Iteration: done.Iterations,
+			Timestamp: time.Now().UTC(),
+		}
+
+		l.evMu.RLock()
+		defer l.evMu.RUnlock()
+		if l.eventClosed {
+			return
+		}
+		if l.cfg.EventSink != nil {
+			l.cfg.EventSink(context.Background(), evt)
+		}
+
+		select {
+		case l.eventCh <- evt:
+			return
+		default:
+		}
+
+		grace := l.cfg.DoneDeliveryGrace
+		if grace <= 0 {
+			grace = defaultDoneDeliveryGrace
+		}
+		timer := time.NewTimer(grace)
+		defer timer.Stop()
+		select {
+		case l.eventCh <- evt:
+		case <-timer.C:
+			l.logger.Warn("agent loop done event not read within grace period; use Result")
+		}
+	})
 }
