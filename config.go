@@ -1,7 +1,6 @@
 package steerloop
 
 import (
-	"context"
 	"log/slog"
 	"time"
 
@@ -26,9 +25,19 @@ const (
 	StopOnExplicit
 )
 
-// EventSink receives every event the loop emits, synchronously, before the
-// event is offered to the event channel. It must not block for long.
-type EventSink func(ctx context.Context, evt Event)
+// StopConditionLabel returns the stable name used in llm_turn events.
+func StopConditionLabel(sc StopCondition) string {
+	switch sc {
+	case StopOnNoToolCalls:
+		return "no_tool_calls"
+	case StopOnFinishTool:
+		return "finish_tool"
+	case StopOnExplicit:
+		return "explicit"
+	default:
+		return ""
+	}
+}
 
 // LoopConfig configures one Loop. The zero value is usable only after
 // MaxIterations is set; DefaultConfig returns sensible values.
@@ -140,16 +149,7 @@ const (
 	defaultDoneDeliveryGrace = 5 * time.Second
 )
 
-// StopConditionLabel returns the stable name used in llm_turn events.
-func StopConditionLabel(sc StopCondition) string {
-	switch sc {
-	case StopOnNoToolCalls:
-		return "no_tool_calls"
-	case StopOnFinishTool:
-		return "finish_tool"
-	case StopOnExplicit:
-		return "explicit"
-	default:
-		return ""
-	}
-}
+const (
+	defaultEventBuffer = 64
+	controlChBuffer    = 8
+)

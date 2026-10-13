@@ -20,7 +20,7 @@ import (
 var update = flag.Bool("update", false, "rewrite golden files")
 
 const (
-	testdata = "../../testdata/"
+	testdata = "testdata/"
 	toolsYML = testdata + "tools.yaml"
 )
 

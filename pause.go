@@ -2,7 +2,6 @@ package steerloop
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -161,58 +160,3 @@ func (l *Loop) waitInject(ctx context.Context) (string, bool) {
 		}
 	}
 }
-
-// drainControls applies every queued control. It returns true when one of them
-// was a stop.
-func (l *Loop) drainControls() bool {
-	for {
-		select {
-		case ctrl := <-l.controlCh:
-			if l.handleControl(ctrl) {
-				return true
-			}
-		default:
-			return false
-		}
-	}
-}
-
-func (l *Loop) handleControl(ctrl Control) bool {
-	switch ctrl.Type {
-	case ControlStop:
-		return true
-
-	case ControlInject:
-		if data, ok := ctrl.Data.(InjectData); ok && data.Message != "" {
-			l.appendRunningMessages(&schema.Message{Role: schema.User, Content: data.Message})
-			l.emitEvent(EventProgress, ProgressData{Message: "User instruction received", Step: "inject"})
-		}
-
-	case ControlModifyConfig:
-		if data, ok := ctrl.Data.(ModifyConfigData); ok {
-			l.applyConfigModification(data)
-			l.emitEvent(EventProgress, ProgressData{Message: "Configuration updated", Step: "config_modify"})
-		}
-	}
-	return false
-}
-
-func (l *Loop) applyConfigModification(data ModifyConfigData) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if data.MaxIterations != nil {
-		l.cfg.MaxIterations = *data.MaxIterations
-	}
-	if data.Temperature != nil {
-		l.cfg.Temperature = *data.Temperature
-	}
-	if data.EnableReflection != nil {
-		l.cfg.EnableReflection = *data.EnableReflection
-	}
-}
-
-// ErrNoActiveLoop is returned by a Registry when the key has no running loop.
-var ErrNoActiveLoop = errors.New("steerloop: no active loop")
-
-// ErrControlQueueFull is returned when a control could not be queued.
-var ErrControlQueueFull = errors.New("steerloop: control queue full")

@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.2.0
+
+The library and the CLI are unchanged. This release is about how the repo is kept up.
+
+- Dependabot checks Go modules and GitHub Actions every day. Smaller Go updates are gathered into one pull request, so you are not reviewing a pile of them.
+- CI lints with golangci-lint. That takes the place of the separate format check and the separate staticcheck run.
+- Locally, `mise run test`, `mise run lint`, and `mise run git-tag-release`. The scripts live in `.mise/scripts`.
+- A new pull request starts from a template keyed `STLOOP-xxx`.
+
 ## v0.1.1
 
 - The module path is now `github.com/mittalkanishk/steerloop`. v0.1.0 was published as `github.com/Kanishkmittal55/steerloop`; update imports when upgrading.
