@@ -1,4 +1,4 @@
-{"type":"run","iteration":0,"timestamp":"T","data":{"version":"(devel)","model":"script:../../testdata/never_ends.json","stop":"no-tool-calls","max_iterations":2,"tools":["say","count_lines","danger","nap"],"prompt":"loop"}}
+{"type":"run","iteration":0,"timestamp":"T","data":{"version":"(devel)","model":"script:testdata/never_ends.json","stop":"no-tool-calls","max_iterations":2,"tools":["say","count_lines","danger","nap"],"prompt":"loop"}}
 {"type":"thinking","iteration":1,"timestamp":"T","data":{"message":"Reasoning (step 1/2)…"}}
 {"type":"llm_turn","iteration":1,"timestamp":"T","data":{"turn_index":1,"input_tokens":0,"output_tokens":0,"cost_amount":0,"provider":"script","model":"never_ends.json","request":{"messages":[{"role":"user","content":"loop"}]},"response_kind":"tool_calls","assistant_tool_calls":[{"id":"call_1","type":"function","function":{"name":"say","arguments":"{\"message\":\"again\"}"}}]}}
 {"type":"tool_call","iteration":1,"timestamp":"T","data":{"tool_call_id":"call_1","name":"say","arguments":"{\"message\":\"again\"}"}}

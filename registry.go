@@ -2,10 +2,14 @@ package steerloop
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/cloudwego/eino/schema"
 )
+
+// ErrNoActiveLoop is returned by a Registry when the key has no running loop.
+var ErrNoActiveLoop = errors.New("steerloop: no active loop")
 
 // ActiveLoop is a running Loop with the function that cancels its context.
 type ActiveLoop struct {

@@ -1,4 +1,4 @@
-{"type":"run","iteration":0,"timestamp":"T","data":{"version":"(devel)","model":"script:../../testdata/finish_tool.json","stop":"finish-tool","max_iterations":12,"tools":["say","count_lines","danger","nap"],"prompt":"do the task"}}
+{"type":"run","iteration":0,"timestamp":"T","data":{"version":"(devel)","model":"script:testdata/finish_tool.json","stop":"finish-tool","max_iterations":12,"tools":["say","count_lines","danger","nap"],"prompt":"do the task"}}
 {"type":"thinking","iteration":1,"timestamp":"T","data":{"message":"Reasoning (step 1/12)…"}}
 {"type":"response","iteration":1,"timestamp":"T","data":{"content":"Let me think about that first."}}
 {"type":"thinking","iteration":2,"timestamp":"T","data":{"message":"Reasoning (step 2/12)…"}}

@@ -6,6 +6,44 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
+func (l *Loop) emitLLMTurnEvent(
+	turn int,
+	usageBefore llmUsageAccumulator,
+	requestMsgs []*schema.Message,
+	reply *schema.Message,
+	durationMs int64,
+) {
+	usage := l.usageSnapshot()
+	inDelta := usage.input - usageBefore.input
+	outDelta := usage.output - usageBefore.output
+
+	var provider, modelName string
+	if l.cfg.ModelIdentity != nil {
+		provider, modelName = l.cfg.ModelIdentity()
+	}
+	var cost float64
+	if l.cfg.CostEstimator != nil {
+		cost = l.cfg.CostEstimator(provider, modelName, inDelta, outDelta)
+	}
+
+	reqJSON, _, _ := SerializeEinoMessagesForAudit(requestMsgs)
+	l.emitEvent(EventLLMTurn, LLMTurnData{
+		TurnIndex:              turn,
+		InputTokens:            inDelta,
+		OutputTokens:           outDelta,
+		CostAmount:             cost,
+		Provider:               provider,
+		Model:                  modelName,
+		DurationMs:             durationMs,
+		RequestMessagesJSON:    reqJSON,
+		ResponseKind:           responseKindForMessage(reply),
+		AssistantContent:       reply.Content,
+		AssistantToolCallsJSON: SerializeAssistantToolCalls(reply),
+		MaxIterations:          l.maxIterations(),
+		StopCondition:          StopConditionLabel(l.cfg.StopCondition),
+	})
+}
+
 // maxAuditRequestJSONBytes caps the serialized request so an audit row stays a
 // bounded size. Oldest messages are dropped first.
 const maxAuditRequestJSONBytes = 256 * 1024
