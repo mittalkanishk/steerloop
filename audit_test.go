@@ -95,7 +95,7 @@ func TestNewToolInfo(t *testing.T) {
 		"required":   []string{"q"},
 	})
 	require.NoError(t, err)
-	js, err := ti.ParamsOneOf.ToJSONSchema()
+	js, err := ti.ToJSONSchema()
 	require.NoError(t, err)
 	assert.Equal(t, []string{"q"}, js.Required)
 

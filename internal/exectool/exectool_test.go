@@ -66,7 +66,7 @@ func TestParse_Valid(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, infos, 2)
 	assert.Equal(t, "say", infos[0].Name)
-	js, err := infos[0].ParamsOneOf.ToJSONSchema()
+	js, err := infos[0].ToJSONSchema()
 	require.NoError(t, err)
 	assert.Equal(t, []string{"message"}, js.Required)
 }

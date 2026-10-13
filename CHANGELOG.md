@@ -6,12 +6,12 @@
 
 ## v0.1.0
 
-First public version.
+First public release.
 
 ### Library
 
 - `Loop` with stop, inject and modify-config controls, a typed event stream, pause tools, retry on transient model failure, a stream idle watchdog and per-turn audit events.
-- `Registry[K]` for finding running loops by key.
+- Active Loop Registry - `Registry[K]` for finding running loops by key.
 - `Loop.Result` returns the outcome without reading the event channel.
 - `steerlooptest`: a scripted chat model, a JSON script format and a recording tool executor.
 
