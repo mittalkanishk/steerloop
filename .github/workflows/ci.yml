@@ -10,6 +10,22 @@ permissions:
   contents: read
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Pinned to the module's Go version: staticcheck, via golangci-lint,
+      # cannot yet read export data from the newest Go.
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.x"
+          check-latest: true
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.9.0
+
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -25,13 +41,6 @@ jobs:
 
       - name: Vet
         run: go vet ./...
-
-      # staticcheck, via golangci-lint, cannot yet read export data from the newest Go.
-      - name: Lint
-        if: matrix.go != 'stable'
-        uses: golangci/golangci-lint-action@v8
-        with:
-          version: v2.9.0
 
       - name: Test
         run: go test -race -count=1 -coverprofile=coverage.out ./...
