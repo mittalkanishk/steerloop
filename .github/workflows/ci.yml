@@ -13,7 +13,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Pinned to the module's Go version: staticcheck, via golangci-lint,
       # cannot yet read export data from the newest Go.
       - uses: actions/setup-go@v7
