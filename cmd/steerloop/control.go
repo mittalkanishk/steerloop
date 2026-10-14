@@ -81,14 +81,35 @@ func (c *controller) line(ctx context.Context, text string) {
 	}
 }
 
-// readLines feeds terminal lines to the controller until the reader ends.
-func (c *controller) readLines(ctx context.Context, r io.Reader) {
-	sc := bufio.NewScanner(r)
-	for sc.Scan() {
-		if ctx.Err() != nil {
-			return
+// scanLines sends each line from r. The channel closes at EOF.
+func scanLines(r io.Reader) <-chan string {
+	ch := make(chan string)
+	go func() {
+		defer close(ch)
+		sc := bufio.NewScanner(r)
+		for sc.Scan() {
+			ch <- sc.Text()
 		}
-		c.line(ctx, sc.Text())
+	}()
+	return ch
+}
+
+// forwardLines applies terminal lines to this turn until stop is closed or
+// lines ends. One scanner feeds both this and the next-prompt wait, so a line
+// is handled by whichever is receiving.
+func (c *controller) forwardLines(ctx context.Context, lines <-chan string, stop <-chan struct{}) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-stop:
+			return
+		case line, ok := <-lines:
+			if !ok {
+				return
+			}
+			c.line(ctx, line)
+		}
 	}
 }
 

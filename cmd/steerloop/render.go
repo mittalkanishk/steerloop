@@ -114,7 +114,12 @@ func (t *textRenderer) render(r record) {
 		}
 
 	case string(steerloop.EventThinking):
-		fmt.Fprintf(t.trace, "[step %d]\n", r.Iteration)
+		var d steerloop.ThinkingData
+		if json.Unmarshal(r.Data, &d) != nil || d.Message == "" {
+			fmt.Fprintf(t.trace, "\n[step %d] %s\n", r.Iteration, "thinking...")
+			return
+		}
+		fmt.Fprintf(t.trace, "\n[step %d] %s\n", r.Iteration, `"thinking...": `+d.Message)
 
 	case string(steerloop.EventToolCall):
 		var d steerloop.ToolCallData
@@ -172,15 +177,18 @@ func (t *textRenderer) render(r record) {
 		}
 
 	case string(steerloop.EventDone):
+
 		var d steerloop.DoneData
 		if json.Unmarshal(r.Data, &d) != nil {
 			return
 		}
+
 		summary := fmt.Sprintf("done: %s · %d step(s) · %d tokens", d.Reason, d.Iterations, d.LLMUsage.TotalTokens)
 		if d.DroppedEvents > 0 {
 			summary += fmt.Sprintf(" · %d event(s) dropped", d.DroppedEvents)
 		}
-		fmt.Fprintln(t.trace, summary)
+
+		fmt.Fprintf(t.trace, "\n%s\n\n", summary)
 		if d.FinalContent != "" && d.Reason != steerloop.DoneReasonAwaitingHuman {
 			fmt.Fprintln(t.final, d.FinalContent)
 		}

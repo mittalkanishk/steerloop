@@ -118,9 +118,11 @@ func (l *Loop) Start(ctx context.Context, startingMessages []*schema.Message) <-
 	copy(seed, startingMessages)
 
 	l.logged = len(l.runningMessages)
+
 	l.mu.Unlock()
 
-	if text := formatTranscript(0, seed); text != "" {
+	text := formatTranscript(0, seed)
+	if text != "" {
 		l.logger.Log(ctx, l.cfg.TranscriptLogLevel, "agent loop seed", slog.String("seed", text))
 	}
 
@@ -129,80 +131,8 @@ func (l *Loop) Start(ctx context.Context, startingMessages []*schema.Message) <-
 	return l.eventCh
 }
 
-func failedStart(msg string) <-chan Event {
-
-	errCh := make(chan Event, 1)
-
-	errCh <- Event{
-		Type:      EventError,
-		Data:      ErrorData{Error: msg, Fatal: true},
-		Timestamp: time.Now().UTC(),
-	}
-
-	close(errCh)
-
-	return errCh
-}
-
-// Wait blocks until the run has ended and the event channel is closed.
-func (l *Loop) Wait() {
-	<-l.done
-}
-
-// Events returns the event channel, the same one Start returns.
-func (l *Loop) Events() <-chan Event {
-	return l.eventCh
-}
-
-// Result returns the outcome of the run. ok is false until the loop has ended.
-// It is the way to learn the outcome without reading the event channel.
-func (l *Loop) Result() (DoneData, bool) {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	return l.result, l.hasResult
-}
-
-// GetCurrentIteration returns the number of model calls started so far.
-func (l *Loop) GetCurrentIteration() int {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	return l.iteration
-}
-
-// GetRunningMessages returns a copy of the conversation as it stands now.
-func (l *Loop) GetRunningMessages() []*schema.Message {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	out := make([]*schema.Message, len(l.runningMessages))
-	copy(out, l.runningMessages)
-	return out
-}
-
-// LoopState is the lifecycle state of a Loop.
-type LoopState string
-
-const (
-	// StateIdle is the state before Start.
-	StateIdle LoopState = "idle"
-	// StateRunning is the state between Start and the done event.
-	StateRunning LoopState = "running"
-	// StateDone means the loop ended on its own: finished, max iterations,
-	// timeout, or handed over to a human.
-	StateDone LoopState = "done"
-	// StateStopped means the loop ended because it was told to stop.
-	StateStopped LoopState = "stopped"
-	// StateError means the loop ended on a fatal error.
-	StateError LoopState = "error"
-)
-
-// GetState returns the lifecycle state.
-func (l *Loop) GetState() LoopState {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	return l.state
-}
-
 func (l *Loop) run(ctx context.Context) {
+
 	defer l.finishRun()
 
 	var totalCtx context.Context
@@ -216,7 +146,7 @@ func (l *Loop) run(ctx context.Context) {
 	defer totalCancel()
 
 	for {
-		maxIter := l.maxIterations()
+		maxIter := l.maxIterations() // the call limit for the loop.
 
 		if l.GetCurrentIteration() >= maxIter {
 			l.emitDone(DoneReasonMaxIterations, "")
@@ -232,19 +162,26 @@ func (l *Loop) run(ctx context.Context) {
 		}
 
 		currentIter := l.nextIteration()
+
 		l.logger.Debug("agent loop iteration", slog.Int("iteration", currentIter), slog.Int("max", maxIter))
+
+		// the loop is emitting the thinking events already.
 		l.emitEvent(EventThinking, ThinkingData{
 			Message: fmt.Sprintf("Reasoning (step %d/%d)…", currentIter, maxIter),
 		})
 
 		messagesFedToLLM := l.GetRunningMessages()
+
 		if l.cfg.HistoryCompactor != nil {
 			messagesFedToLLM = l.cfg.HistoryCompactor(messagesFedToLLM)
 		}
 
 		usageBefore := l.usageSnapshot()
+
 		callStart := time.Now()
+
 		reply, err := l.callModel(totalCtx, l.llm, messagesFedToLLM)
+
 		llmDurationMs := time.Since(callStart).Milliseconds()
 
 		if err != nil {
@@ -325,6 +262,79 @@ func (l *Loop) run(ctx context.Context) {
 			l.logRunningMessages(totalCtx, currentIter)
 		}
 	}
+}
+
+func failedStart(msg string) <-chan Event {
+
+	errCh := make(chan Event, 1)
+
+	errCh <- Event{
+		Type:      EventError,
+		Data:      ErrorData{Error: msg, Fatal: true},
+		Timestamp: time.Now().UTC(),
+	}
+
+	close(errCh)
+
+	return errCh
+}
+
+// Wait blocks until the run has ended and the event channel is closed.
+func (l *Loop) Wait() {
+	<-l.done
+}
+
+// Events returns the event channel, the same one Start returns.
+func (l *Loop) Events() <-chan Event {
+	return l.eventCh
+}
+
+// Result returns the outcome of the run. ok is false until the loop has ended.
+// It is the way to learn the outcome without reading the event channel.
+func (l *Loop) Result() (DoneData, bool) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.result, l.hasResult
+}
+
+// GetCurrentIteration returns the number of model calls started so far.
+func (l *Loop) GetCurrentIteration() int {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.iteration
+}
+
+// GetRunningMessages returns a copy of the conversation as it stands now.
+func (l *Loop) GetRunningMessages() []*schema.Message {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	out := make([]*schema.Message, len(l.runningMessages))
+	copy(out, l.runningMessages)
+	return out
+}
+
+// LoopState is the lifecycle state of a Loop.
+type LoopState string
+
+const (
+	// StateIdle is the state before Start.
+	StateIdle LoopState = "idle"
+	// StateRunning is the state between Start and the done event.
+	StateRunning LoopState = "running"
+	// StateDone means the loop ended on its own: finished, max iterations,
+	// timeout, or handed over to a human.
+	StateDone LoopState = "done"
+	// StateStopped means the loop ended because it was told to stop.
+	StateStopped LoopState = "stopped"
+	// StateError means the loop ended on a fatal error.
+	StateError LoopState = "error"
+)
+
+// GetState returns the lifecycle state.
+func (l *Loop) GetState() LoopState {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.state
 }
 
 // runTool executes one tool call and records its result in the history.
