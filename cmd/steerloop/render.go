@@ -177,7 +177,7 @@ func (t *textRenderer) render(r record) {
 		}
 
 	case string(steerloop.EventDone):
-		
+
 		var d steerloop.DoneData
 		if json.Unmarshal(r.Data, &d) != nil {
 			return

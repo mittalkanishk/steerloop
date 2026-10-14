@@ -91,11 +91,11 @@ func (o runOptions) validate() error {
 }
 
 func runCommand(e env, args []string) int {
-	
+
 	var opts runOptions
-	
+
 	flags := runFlags(e.stderr, &opts)
-	
+
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return exitOK

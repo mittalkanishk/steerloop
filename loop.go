@@ -135,7 +135,7 @@ func (l *Loop) run(ctx context.Context) {
 
 	defer l.finishRun()
 
-	var totalCtx context.Context 
+	var totalCtx context.Context
 	var totalCancel context.CancelFunc
 
 	if l.cfg.TotalTimeout > 0 {
@@ -162,26 +162,26 @@ func (l *Loop) run(ctx context.Context) {
 		}
 
 		currentIter := l.nextIteration()
-		
+
 		l.logger.Debug("agent loop iteration", slog.Int("iteration", currentIter), slog.Int("max", maxIter))
-		
+
 		// the loop is emitting the thinking events already.
 		l.emitEvent(EventThinking, ThinkingData{
 			Message: fmt.Sprintf("Reasoning (step %d/%d)…", currentIter, maxIter),
 		})
 
 		messagesFedToLLM := l.GetRunningMessages()
-		
+
 		if l.cfg.HistoryCompactor != nil {
 			messagesFedToLLM = l.cfg.HistoryCompactor(messagesFedToLLM)
 		}
 
 		usageBefore := l.usageSnapshot()
-		
+
 		callStart := time.Now()
-		
+
 		reply, err := l.callModel(totalCtx, l.llm, messagesFedToLLM)
-		
+
 		llmDurationMs := time.Since(callStart).Milliseconds()
 
 		if err != nil {
