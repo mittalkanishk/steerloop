@@ -21,6 +21,17 @@ jobs:
           go-version: "1.26.x"
           check-latest: true
 
+      # typecheck downloads missing modules and does not retry. A dropped
+      # proxy.golang.org zip (HTTP/2 INTERNAL_ERROR) is reported as an import error.
+      - name: Download modules
+        run: |
+          for attempt in 1 2 3 4 5; do
+            go mod download && exit 0
+            echo "go mod download failed (attempt ${attempt})"
+            sleep $((attempt * 5))
+          done
+          exit 1
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
