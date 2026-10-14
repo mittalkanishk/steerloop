@@ -323,9 +323,10 @@ func terminal(t *testing.T, args []string, exchanges ...[2]string) result {
 		_, err := pw.Write([]byte(reply + "\n"))
 		require.NoError(t, err)
 	}
+	// Close so a session that is waiting for the next prompt sees EOF and exits.
+	pw.Close()
 	select {
 	case res := <-done:
-		pw.Close()
 		return res
 	case <-time.After(15 * time.Second):
 		t.Fatalf("run did not finish; stderr:\n%s", r.stderr.String())
@@ -376,6 +377,17 @@ func TestRun_SlashCommandsOnTerminal(t *testing.T) {
 	)
 	assert.Equal(t, exitStopped, res.code, res.stderr)
 	assert.Contains(t, res.stderr, "done: stopped")
+}
+
+// A finished answer on a terminal waits for the next prompt and keeps the history.
+func TestRun_SessionReadsTheNextPrompt(t *testing.T) {
+	scriptPath := writeFile(t, "two.json", `{"steps":[{"content":"four"},{"content":"six"}]}`+"\n")
+	res := terminal(t, []string{"run", "--model", "script:" + scriptPath, "2+2"},
+		[2]string{"> ", "3+3"},
+	)
+	require.Equal(t, exitOK, res.code, res.stderr)
+	assert.Equal(t, "four\nsix\n", res.stdout)
+	assert.Contains(t, res.stderr, "done: finished · 1 step(s)")
 }
 
 // C6: a replay prints what the live run printed, without a model or a tool.
