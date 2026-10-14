@@ -1,8 +1,8 @@
 # steerloop
 
-A controllable agent loop for Go, built on [CloudWeGo Eino](https://github.com/cloudwego/eino).
+A controllable agent harness for Go, built on [CloudWeGo Eino](https://github.com/cloudwego/eino).
 
-A `Loop` calls a tool-calling chat model, runs the tools it asks for, feeds the results back and repeats. What this package adds is control over a run that is already in flight:
+A `harness` (or loop) calls a tool-calling chat model, runs the tools it asks for, feeds the results back and repeats. What this package adds is control over a run that is already in flight:
 
 - **Steer it.** Stop it, inject a user message, or change its iteration cap and temperature while it runs.
 - **Watch it.** A typed event stream: model turns, tool calls, tool results, the final outcome.
