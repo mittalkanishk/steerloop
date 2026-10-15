@@ -4,7 +4,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"os/signal"
 	"runtime"
@@ -24,16 +23,6 @@ const (
 	exitAwaitingHuman = 5
 	exitStopped       = 130
 )
-
-// env is everything the CLI takes from its surroundings, so tests can supply
-// their own.
-type env struct {
-	stdin           io.Reader
-	stdout, stderr  io.Writer
-	stdinIsTerminal bool
-	getenv          func(string) string
-	signals         <-chan os.Signal
-}
 
 const usage = `steerloop runs an agent loop from the terminal.
 

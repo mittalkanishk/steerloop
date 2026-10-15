@@ -10,7 +10,6 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/cloudwego/eino/components/model"
@@ -27,25 +26,6 @@ var stopConditions = map[string]steerloop.StopCondition{
 	"no-tool-calls": steerloop.StopOnNoToolCalls,
 	"finish-tool":   steerloop.StopOnFinishTool,
 	"explicit":      steerloop.StopOnExplicit,
-}
-
-// runOptions is the `steerloop run` command line, as parsed from its flags.
-type runOptions struct {
-	model            string
-	manifestPath     string
-	systemPromptPath string
-	stopName         string
-	outputFormat     string
-	recordPath       string
-	controlPath      string
-	maxIterations    int
-	maxTokens        int
-	stepTimeout      time.Duration
-	totalTimeout     time.Duration
-	temperature      float64
-	askUser          bool
-	autoApprove      bool
-	verbose          bool
 }
 
 // runFlags declares the flags of `steerloop run` and binds them to opts.
@@ -91,11 +71,8 @@ func (o runOptions) validate() error {
 }
 
 func runCommand(e env, args []string) int {
-
 	var opts runOptions
-
 	flags := runFlags(e.stderr, &opts)
-
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return exitOK
@@ -267,15 +244,6 @@ func readPrompt(e env, args []string) (prompt string, fromStdin bool, err error)
 	return prompt, fromStdin, nil
 }
 
-// toolset is what the model can call: the manifest's tools, plus ask_user
-// and finish when asked for, with the pauses that gate them.
-type toolset struct {
-	infos    []*schema.ToolInfo
-	names    []string // for the run header; the finish tool is not listed
-	executor steerloop.ToolExecutor
-	pauses   map[string]steerloop.PauseFunc
-}
-
 func buildToolset(opts runOptions, stop steerloop.StopCondition, humanAvailable bool) (toolset, error) {
 	tools := toolset{
 		pauses: map[string]steerloop.PauseFunc{},
@@ -390,15 +358,6 @@ func openOutputs(e env, opts runOptions) (emit func(record), closeOutputs func()
 	return emit, closeOutputs, nil
 }
 
-// interruptWatcher maps Ctrl-C onto the run. The first press stops the
-// running loop after its current step and a second press aborts outright.
-// While the CLI waits at the prompt a single press ends the session.
-type interruptWatcher struct {
-	running  atomic.Pointer[steerloop.Loop] // nil between turns
-	atPrompt atomic.Bool
-	aborted  chan struct{}
-}
-
 func watchInterrupts(ctx context.Context, cancel context.CancelFunc, signals <-chan os.Signal, stderr io.Writer) *interruptWatcher {
 	w := &interruptWatcher{aborted: make(chan struct{})}
 	if signals == nil {
@@ -465,7 +424,7 @@ func askPause(humanAvailable bool) steerloop.PauseFunc {
 		}
 		_ = json.Unmarshal([]byte(in.Arguments), &args)
 		if strings.TrimSpace(args.Question) == "" {
-			return "ask_user needs a non-empty \"question\".", true
+			return askUserToolName + " needs a non-empty \"question\".", true
 		}
 		in.Emit(steerloop.EventAwaitingInput, steerloop.AwaitingInputData{Question: args.Question, Options: args.Options})
 		if !humanAvailable {

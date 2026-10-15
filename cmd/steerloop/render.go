@@ -6,46 +6,13 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/mittalkanishk/steerloop"
 )
 
-// record is one line of JSONL output: an event, or the "run" header line.
-type record struct {
-	Type      string          `json:"type"`
-	Iteration int             `json:"iteration"`
-	Timestamp time.Time       `json:"timestamp"`
-	Data      json.RawMessage `json:"data"`
-}
-
+// recordTypeRun marks the header line of a recording.
 const recordTypeRun = "run"
-
-// runHeader is the data of the first line of a recording.
-type runHeader struct {
-	Version       string   `json:"version"`
-	Model         string   `json:"model"`
-	Stop          string   `json:"stop"`
-	MaxIterations int      `json:"max_iterations"`
-	Tools         []string `json:"tools"`
-	Prompt        string   `json:"prompt"`
-}
-
-// turnRecord is LLMTurnData with its JSON fields readable instead of base64.
-type turnRecord struct {
-	TurnIndex          int             `json:"turn_index"`
-	InputTokens        int             `json:"input_tokens"`
-	OutputTokens       int             `json:"output_tokens"`
-	CostAmount         float64         `json:"cost_amount"`
-	Provider           string          `json:"provider,omitempty"`
-	Model              string          `json:"model,omitempty"`
-	DurationMs         int64           `json:"duration_ms"`
-	Request            json.RawMessage `json:"request,omitempty"`
-	ResponseKind       string          `json:"response_kind"`
-	AssistantContent   string          `json:"assistant_content,omitempty"`
-	AssistantToolCalls json.RawMessage `json:"assistant_tool_calls,omitempty"`
-}
 
 func toRecord(evt steerloop.Event) (record, error) {
 	payload := evt.Data
@@ -76,12 +43,6 @@ func headerRecord(h runHeader) record {
 	return record{Type: recordTypeRun, Timestamp: time.Now().UTC(), Data: data}
 }
 
-// jsonlWriter writes records as JSON lines. It is safe for concurrent use.
-type jsonlWriter struct {
-	mu sync.Mutex
-	w  io.Writer
-}
-
 func (j *jsonlWriter) write(r record) error {
 	line, err := json.Marshal(r)
 	if err != nil {
@@ -93,15 +54,8 @@ func (j *jsonlWriter) write(r record) error {
 	return err
 }
 
-// textRenderer prints a run for a person: the trace on trace, the final
-// content on final. Live runs and replays share it, so they print the same.
-type textRenderer struct {
-	trace io.Writer
-	final io.Writer
-	// stop is the run's stop condition, from the header.
-	stop string
-}
-
+// maxResultPreview is how much of an argument, result or reply the text
+// renderer shows on one line.
 const maxResultPreview = 240
 
 func (t *textRenderer) render(r record) {
@@ -177,7 +131,6 @@ func (t *textRenderer) render(r record) {
 		}
 
 	case string(steerloop.EventDone):
-
 		var d steerloop.DoneData
 		if json.Unmarshal(r.Data, &d) != nil {
 			return
