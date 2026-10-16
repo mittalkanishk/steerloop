@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"flag"
 	"io"
@@ -9,7 +8,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -30,18 +28,20 @@ const (
 // scenario.
 type CLISuite struct {
 	suite.Suite
-	stdin io.Reader // stdin is what the command reads. Nil means nothing is piped in.
-	terminal bool // terminal reports stdin as a terminal, so the command prompts on it.
-	vars map[string]string // vars is the command's environment.
-	signals <-chan os.Signal // signals is what the command receives as interrupts.
-	stdout, stderr *syncBuffer // stdout and stderr collect what the current run prints. They can be read while the run is still going.
+	stdin  io.Reader   // stdin is what the command reads. Nil means nothing is piped in.
+	stdout *SyncBuffer // stdout and stderr collect what the current run prints. They can be read while the run is still going.
+	stderr *SyncBuffer
+
+	terminal bool              // terminal reports stdin as a terminal, so the command prompts on it.
+	vars     map[string]string // vars is the command's environment.
+	signals  <-chan os.Signal  // signals is what the command receives as interrupts.
 }
 
 func TestCLISuite(t *testing.T) {
 	suite.Run(t, new(CLISuite))
 }
 
-func (s *CLISuite) SetupTest()    { s.reset() }
+func (s *CLISuite) SetupTest() { s.reset() }
 
 func (s *CLISuite) SetupSubTest() { s.reset() }
 
@@ -50,7 +50,7 @@ func (s *CLISuite) reset() {
 	s.terminal = false
 	s.vars = map[string]string{}
 	s.signals = nil
-	s.stdout, s.stderr = &syncBuffer{}, &syncBuffer{}
+	s.stdout, s.stderr = &SyncBuffer{}, &SyncBuffer{}
 }
 
 // result is what one run of the command left behind.
@@ -62,15 +62,18 @@ type result struct {
 // run invokes the command with the suite's stdin, environment and signals
 // and waits for it to exit.
 func (s *CLISuite) run(args ...string) result {
-	return <-s.start(args...)
+	return <-s.startSteerLoopCommandRun(args...)
 }
 
-// start invokes the command in the background, into fresh output buffers
+// start invokes the steerloop command in the background, into fresh output buffers
 // that the test can read while it runs. The result arrives on the channel
 // when the command exits.
-func (s *CLISuite) start(args ...string) <-chan result {
-	stdout, stderr := &syncBuffer{}, &syncBuffer{}
+func (s *CLISuite) startSteerLoopCommandRun(args ...string) <-chan result {
+
+	stdout, stderr := &SyncBuffer{}, &SyncBuffer{}
+
 	s.stdout, s.stderr = stdout, stderr
+
 	e := env{
 		stdin:           s.stdin,
 		stdout:          stdout,
@@ -79,30 +82,42 @@ func (s *CLISuite) start(args ...string) <-chan result {
 		getenv:          func(k string) string { return s.vars[k] },
 		signals:         s.signals,
 	}
+
 	done := make(chan result, 1)
+
 	go func() {
 		code := dispatch(e, args)
-		done <- result{code: code, stdout: stdout.String(), stderr: stderr.String()}
+		done <- result{ // result sends a value into the channel.
+			code:   code,
+			stdout: stdout.String(),
+			stderr: stderr.String(),
+		}
 	}()
+
 	return done
 }
 
-// typing runs the command as if a person were at the terminal: each reply is
+// typing runs the steerloopcommand as if a person were at the terminal: each reply is
 // written to stdin once the given text has appeared on stderr. Closing stdin
 // afterwards lets a session that waits for the next prompt see EOF and exit.
+// This typing is what build the real pipe
 func (s *CLISuite) typing(args []string, exchanges ...[2]string) result {
+
 	s.T().Helper()
 	pr, pw := io.Pipe()
 	s.stdin, s.terminal = pr, true
-	done := s.start(args...)
+	done := s.startSteerLoopCommandRun(args...)
 
 	for _, ex := range exchanges {
 		waitFor, reply := ex[0], ex[1]
 		s.waitForStderr(waitFor)
+
 		_, err := pw.Write([]byte(reply + "\n"))
 		s.Require().NoError(err)
 	}
+
 	pw.Close()
+	
 	select {
 	case res := <-done:
 		return res
@@ -120,24 +135,6 @@ func (s *CLISuite) waitForStderr(text string) {
 		s.Require().Truef(time.Now().Before(deadline), "never saw %q in:\n%s", text, s.stderr.String())
 		time.Sleep(5 * time.Millisecond)
 	}
-}
-
-// syncBuffer is a bytes.Buffer that can be read while another goroutine writes.
-type syncBuffer struct {
-	mu  sync.Mutex
-	buf bytes.Buffer
-}
-
-func (b *syncBuffer) Write(p []byte) (int, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buf.Write(p)
-}
-
-func (b *syncBuffer) String() string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buf.String()
 }
 
 // script names a scripted model from testdata.
@@ -158,6 +155,7 @@ func (s *CLISuite) writeManifest(toolName string) string {
 
 var (
 	timestampRE = regexp.MustCompile(`"timestamp":"[^"]+"`)
+
 	// A tool result omits duration_ms when the tool finishes within a
 	// millisecond, so the field is dropped rather than zeroed.
 	durationRE = regexp.MustCompile(`,"duration_ms":\d+`)
@@ -172,15 +170,21 @@ func normalise(jsonl string) string {
 // checkGolden compares got with testdata/golden/name, or rewrites the file
 // under -update.
 func (s *CLISuite) checkGolden(name, got string) {
+
 	s.T().Helper()
+
 	path := filepath.Join(testdata, "golden", name)
+
 	if *update {
 		s.Require().NoError(os.MkdirAll(filepath.Dir(path), 0o755))
 		s.Require().NoError(os.WriteFile(path, []byte(got), 0o644))
 		return
 	}
+
 	want, err := os.ReadFile(path)
+
 	s.Require().NoError(err, "run the tests with -update to create golden files")
+
 	s.Equal(string(want), got)
 }
 
@@ -224,6 +228,7 @@ func (s *CLISuite) doneReason(events []event) string {
 
 // C1: recorded output of each scripted run matches its golden file.
 func (s *CLISuite) TestRun_GoldenJSONL() {
+
 	cases := map[string][]string{
 		"tool_then_answer": {"--model", script("tool_then_answer.json"), "--tools", toolsYML, "hi"},
 		"finish_tool":      {"--model", script("finish_tool.json"), "--tools", toolsYML, "--stop", "finish-tool", "do the task"},
@@ -232,6 +237,7 @@ func (s *CLISuite) TestRun_GoldenJSONL() {
 		"ask_unanswered":   {"--model", script("ask_user.json"), "--ask", "pick"},
 		"confirm_no_one":   {"--model", script("confirm.json"), "--tools", toolsYML, "clean up"},
 	}
+
 	for name, args := range cases {
 		s.Run(name, func() {
 			res := s.run(append([]string{"run", "--output", "jsonl"}, args...)...)
@@ -242,6 +248,7 @@ func (s *CLISuite) TestRun_GoldenJSONL() {
 
 // C2: each outcome has its own exit code.
 func (s *CLISuite) TestRun_ExitCodes() {
+
 	stop := s.writeFile("stop.jsonl", `{"type":"stop","wait_ms":100}`+"\n")
 
 	cases := []struct {
@@ -256,15 +263,18 @@ func (s *CLISuite) TestRun_ExitCodes() {
 		{"awaiting human", exitAwaitingHuman, []string{"--model", script("ask_user.json"), "--ask", "x"}},
 		{"stopped", exitStopped, []string{"--model", script("slow_tools.json"), "--tools", toolsYML, "--control", stop, "x"}},
 	}
+
 	for _, tc := range cases {
 		s.Run(tc.name, func() {
 			res := s.run(append([]string{"run"}, tc.args...)...)
 			s.Equal(tc.want, res.code, res.stderr)
 		})
 	}
+
 }
 
 func (s *CLISuite) TestRun_UsageErrors() {
+
 	cases := map[string][]string{
 		"--model is required":             {"run", "hi"},
 		"--stop must be":                  {"run", "--model", "script:x", "--stop", "never", "hi"},
@@ -289,6 +299,7 @@ func (s *CLISuite) TestRun_UsageErrors() {
 		"recording has no done event":     {"replay", s.writeFile("nodone.jsonl", `{"type":"thinking","data":{}}`+"\n")},
 		"no such file or directory":       {"replay", "/no/such/recording.jsonl"},
 	}
+
 	for want, args := range cases {
 		s.Run(want, func() {
 			res := s.run(args...)
@@ -500,7 +511,7 @@ func (s *CLISuite) TestRun_Interrupts() {
 		s.Run(name, func() {
 			signals := make(chan os.Signal, 2)
 			s.signals = signals
-			done := s.start("run", "--model", script("nap.json"), "--tools", toolsYML, "rest")
+			done := s.startSteerLoopCommandRun("run", "--model", script("nap.json"), "--tools", toolsYML, "rest")
 
 			s.waitForStderr("→ nap")
 			start := time.Now()

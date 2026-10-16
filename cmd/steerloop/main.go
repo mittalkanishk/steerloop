@@ -40,6 +40,7 @@ func main() {
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 
 	stat, _ := os.Stdin.Stat()
+
 	e := env{
 		stdin:           os.Stdin,
 		stdout:          os.Stdout,
@@ -48,14 +49,17 @@ func main() {
 		getenv:          os.Getenv,
 		signals:         signals,
 	}
+
 	os.Exit(dispatch(e, os.Args[1:]))
 }
 
 func dispatch(e env, args []string) int {
+	
 	if len(args) == 0 {
 		fmt.Fprint(e.stderr, usage)
 		return exitUsage
 	}
+
 	switch args[0] {
 	case "run":
 		return runCommand(e, args[1:])
