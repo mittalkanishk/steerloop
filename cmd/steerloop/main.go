@@ -4,7 +4,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"os/signal"
 	"runtime"
@@ -25,20 +24,10 @@ const (
 	exitStopped       = 130
 )
 
-// env is everything the CLI takes from its surroundings, so tests can supply
-// their own.
-type env struct {
-	stdin           io.Reader
-	stdout, stderr  io.Writer
-	stdinIsTerminal bool
-	getenv          func(string) string
-	signals         <-chan os.Signal
-}
-
 const usage = `steerloop runs an agent loop from the terminal.
 
 Usage:
-  steerloop run [flags] [prompt]      run one loop
+  steerloop run --prompt <text> ...   run one loop
   steerloop replay <file.jsonl>       re-render a recorded run; no model call
   steerloop tools validate <file>     check a tool manifest
   steerloop version                   print version information
@@ -51,6 +40,7 @@ func main() {
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 
 	stat, _ := os.Stdin.Stat()
+
 	e := env{
 		stdin:           os.Stdin,
 		stdout:          os.Stdout,
@@ -59,14 +49,17 @@ func main() {
 		getenv:          os.Getenv,
 		signals:         signals,
 	}
+
 	os.Exit(dispatch(e, os.Args[1:]))
 }
 
 func dispatch(e env, args []string) int {
+
 	if len(args) == 0 {
 		fmt.Fprint(e.stderr, usage)
 		return exitUsage
 	}
+
 	switch args[0] {
 	case "run":
 		return runCommand(e, args[1:])

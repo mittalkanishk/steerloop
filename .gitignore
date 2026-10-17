@@ -1,6 +1,18 @@
+# Go
 /steerloop
 /dist/
 *.test
 *.out
+
+# Local environment
 .env
 .DS_Store
+
+# Python (the video tooling's scripts)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Video production: scripts, slides, recordings and exports
+/youtube/

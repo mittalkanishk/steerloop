@@ -10,7 +10,6 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/cloudwego/eino/components/model"
@@ -29,29 +28,11 @@ var stopConditions = map[string]steerloop.StopCondition{
 	"explicit":      steerloop.StopOnExplicit,
 }
 
-// runOptions is the `steerloop run` command line, as parsed from its flags.
-type runOptions struct {
-	model            string
-	manifestPath     string
-	systemPromptPath string
-	stopName         string
-	outputFormat     string
-	recordPath       string
-	controlPath      string
-	maxIterations    int
-	maxTokens        int
-	stepTimeout      time.Duration
-	totalTimeout     time.Duration
-	temperature      float64
-	askUser          bool
-	autoApprove      bool
-	verbose          bool
-}
-
 // runFlags declares the flags of `steerloop run` and binds them to opts.
 func runFlags(stderr io.Writer, opts *runOptions) *flag.FlagSet {
 	flags := flag.NewFlagSet("steerloop run", flag.ContinueOnError)
 	flags.SetOutput(stderr)
+	flags.StringVar(&opts.prompt, "prompt", "", "the prompt for the first turn (required)")
 	flags.StringVar(&opts.model, "model", "", "anthropic:<model>, openai:<model> or script:<path> (required)")
 	flags.StringVar(&opts.manifestPath, "tools", "", "path to a tool manifest (YAML)")
 	flags.StringVar(&opts.systemPromptPath, "system", "", "path to a system prompt file")
@@ -68,7 +49,7 @@ func runFlags(stderr io.Writer, opts *runOptions) *flag.FlagSet {
 	flags.StringVar(&opts.controlPath, "control", "", "read JSONL controls from this file or FIFO")
 	flags.BoolVar(&opts.verbose, "verbose", false, "write the loop's debug log to stderr")
 	flags.Usage = func() {
-		fmt.Fprintln(stderr, "usage: steerloop run [flags] [prompt]\n\nFlags go before the prompt. With no prompt argument the prompt is read from stdin.")
+		fmt.Fprintln(stderr, "usage: steerloop run --model <spec> --prompt <text> [flags]\n\nThe prompt is always given with --prompt; stdin stays free for answering the run.")
 		flags.PrintDefaults()
 	}
 	return flags
@@ -80,6 +61,8 @@ func (o runOptions) validate() error {
 	switch {
 	case o.model == "":
 		return errors.New("--model is required")
+	case strings.TrimSpace(o.prompt) == "":
+		return errors.New("--prompt is required")
 	case !knownStop:
 		return errors.New("--stop must be no-tool-calls, finish-tool or explicit")
 	case o.outputFormat != "text" && o.outputFormat != "jsonl":
@@ -91,11 +74,8 @@ func (o runOptions) validate() error {
 }
 
 func runCommand(e env, args []string) int {
-
 	var opts runOptions
-
 	flags := runFlags(e.stderr, &opts)
-
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return exitOK
@@ -103,15 +83,15 @@ func runCommand(e env, args []string) int {
 		return exitUsage // the flag package has already reported the problem
 	}
 
+	if rest := flags.Args(); len(rest) > 0 {
+		return usageError(e.stderr, fmt.Errorf("unexpected argument %q: give the prompt with --prompt", strings.Join(rest, " ")))
+	}
 	if err := opts.validate(); err != nil {
 		return usageError(e.stderr, err)
 	}
 	stop := stopConditions[opts.stopName]
 
-	prompt, promptFromStdin, err := readPrompt(e, flags.Args())
-	if err != nil {
-		return usageError(e.stderr, err)
-	}
+	prompt := strings.TrimSpace(opts.prompt)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -123,7 +103,7 @@ func runCommand(e env, args []string) int {
 
 	// Someone can answer the model's questions at the terminal, or through
 	// the control file.
-	interactive := e.stdinIsTerminal && !promptFromStdin && e.stdin != nil
+	interactive := e.stdinIsTerminal && e.stdin != nil
 	humanAvailable := interactive || opts.controlPath != ""
 
 	tools, err := buildToolset(opts, stop, humanAvailable)
@@ -248,34 +228,6 @@ func usageError(stderr io.Writer, err error) int {
 	return exitUsage
 }
 
-// readPrompt takes the prompt from the arguments, or from stdin when it is
-// piped. It reports whether stdin was used, since that stdin can then not
-// serve as the terminal.
-func readPrompt(e env, args []string) (prompt string, fromStdin bool, err error) {
-	prompt = strings.TrimSpace(strings.Join(args, " "))
-	if prompt == "" && !e.stdinIsTerminal && e.stdin != nil {
-		data, err := io.ReadAll(e.stdin)
-		if err != nil {
-			return "", false, fmt.Errorf("read prompt: %w", err)
-		}
-		prompt = strings.TrimSpace(string(data))
-		fromStdin = true
-	}
-	if prompt == "" {
-		return "", false, errors.New("a prompt is required, as an argument or on stdin")
-	}
-	return prompt, fromStdin, nil
-}
-
-// toolset is what the model can call: the manifest's tools, plus ask_user
-// and finish when asked for, with the pauses that gate them.
-type toolset struct {
-	infos    []*schema.ToolInfo
-	names    []string // for the run header; the finish tool is not listed
-	executor steerloop.ToolExecutor
-	pauses   map[string]steerloop.PauseFunc
-}
-
 func buildToolset(opts runOptions, stop steerloop.StopCondition, humanAvailable bool) (toolset, error) {
 	tools := toolset{
 		pauses: map[string]steerloop.PauseFunc{},
@@ -390,15 +342,6 @@ func openOutputs(e env, opts runOptions) (emit func(record), closeOutputs func()
 	return emit, closeOutputs, nil
 }
 
-// interruptWatcher maps Ctrl-C onto the run. The first press stops the
-// running loop after its current step and a second press aborts outright.
-// While the CLI waits at the prompt a single press ends the session.
-type interruptWatcher struct {
-	running  atomic.Pointer[steerloop.Loop] // nil between turns
-	atPrompt atomic.Bool
-	aborted  chan struct{}
-}
-
 func watchInterrupts(ctx context.Context, cancel context.CancelFunc, signals <-chan os.Signal, stderr io.Writer) *interruptWatcher {
 	w := &interruptWatcher{aborted: make(chan struct{})}
 	if signals == nil {
@@ -465,7 +408,7 @@ func askPause(humanAvailable bool) steerloop.PauseFunc {
 		}
 		_ = json.Unmarshal([]byte(in.Arguments), &args)
 		if strings.TrimSpace(args.Question) == "" {
-			return "ask_user needs a non-empty \"question\".", true
+			return askUserToolName + " needs a non-empty \"question\".", true
 		}
 		in.Emit(steerloop.EventAwaitingInput, steerloop.AwaitingInputData{Question: args.Question, Options: args.Options})
 		if !humanAvailable {

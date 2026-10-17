@@ -13,13 +13,7 @@ import (
 	"github.com/mittalkanishk/steerloop"
 )
 
-// controller applies steering input to a running loop.
-type controller struct {
-	loop   *steerloop.Loop
-	stderr io.Writer
-}
-
-// inject retries briefly when the control queue is full, so a line typed
+// send retries briefly when the control queue is full, so a line typed
 // during a long model call is not lost.
 func (c *controller) send(ctx context.Context, ctrl steerloop.Control) {
 	for i := 0; i < 200; i++ {
@@ -111,17 +105,6 @@ func (c *controller) forwardLines(ctx context.Context, lines <-chan string, stop
 			c.line(ctx, line)
 		}
 	}
-}
-
-// controlLine is one line of a --control file.
-type controlLine struct {
-	Type             string   `json:"type"`
-	Message          string   `json:"message"`
-	MaxIterations    *int     `json:"max_iterations"`
-	Temperature      *float64 `json:"temperature"`
-	EnableReflection *bool    `json:"enable_reflection"`
-	// WaitMs delays this control, counted from the previous one.
-	WaitMs int `json:"wait_ms"`
 }
 
 // readControls applies JSONL controls from a file or FIFO.

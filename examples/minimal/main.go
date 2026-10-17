@@ -17,6 +17,7 @@ import (
 )
 
 func main() {
+
 	upper, err := steerloop.NewToolInfo("upper", "Upper-case a string.", map[string]any{
 		"type":       "object",
 		"properties": map[string]any{"text": map[string]any{"type": "string"}},
@@ -47,6 +48,7 @@ func main() {
 	}
 
 	messages := []*schema.Message{{Role: schema.User, Content: "Upper-case the word hello."}}
+
 	for evt := range loop.Start(context.Background(), messages) {
 		switch data := evt.Data.(type) {
 		case steerloop.ToolCallData:
