@@ -48,7 +48,7 @@ func main() {
 	}
 
 	messages := []*schema.Message{{Role: schema.User, Content: "Upper-case the word hello."}}
-	
+
 	for evt := range loop.Start(context.Background(), messages) {
 		switch data := evt.Data.(type) {
 		case steerloop.ToolCallData:

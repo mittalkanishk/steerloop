@@ -54,7 +54,7 @@ func main() {
 }
 
 func dispatch(e env, args []string) int {
-	
+
 	if len(args) == 0 {
 		fmt.Fprint(e.stderr, usage)
 		return exitUsage

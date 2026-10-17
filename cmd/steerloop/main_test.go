@@ -117,7 +117,7 @@ func (s *CLISuite) typing(args []string, exchanges ...[2]string) result {
 	}
 
 	pw.Close()
-	
+
 	select {
 	case res := <-done:
 		return res
