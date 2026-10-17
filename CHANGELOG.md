@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Breaking: `steerloop run` takes the prompt only from `--prompt <text>`, which is required. Words after the flags are a usage error, and stdin is no longer read as the prompt. Update `steerloop run ... "do it"` to `steerloop run ... --prompt "do it"`.
+
 ## v0.2.0
 
 The library and the CLI are unchanged. This release is about how the repo is kept up.

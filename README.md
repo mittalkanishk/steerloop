@@ -109,8 +109,10 @@ The reply becomes the tool's result. Returning `false` ends the run with reason 
 ```sh
 export ANTHROPIC_API_KEY=...      # or OPENAI_API_KEY
 steerloop run --model anthropic:<model> --tools examples/tools.yaml \
-  "How many lines is README.md, and which files mention Registry?"
+  --prompt "How many lines is README.md, and which files mention Registry?"
 ```
+
+The prompt is required and always goes in `--prompt`. Words after the flags are rejected, and stdin is never read as the prompt; it stays free for answering the run.
 
 The trace goes to stderr and the final answer to stdout:
 

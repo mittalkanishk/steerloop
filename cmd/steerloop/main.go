@@ -27,7 +27,7 @@ const (
 const usage = `steerloop runs an agent loop from the terminal.
 
 Usage:
-  steerloop run [flags] [prompt]      run one loop
+  steerloop run --prompt <text> ...   run one loop
   steerloop replay <file.jsonl>       re-render a recorded run; no model call
   steerloop tools validate <file>     check a tool manifest
   steerloop version                   print version information

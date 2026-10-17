@@ -35,6 +35,7 @@ type env struct {
 
 // runOptions is the `steerloop run` command line, as parsed from its flags.
 type runOptions struct {
+	prompt           string // --prompt, required
 	model            string
 	manifestPath     string
 	systemPromptPath string

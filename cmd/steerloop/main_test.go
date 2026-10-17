@@ -97,7 +97,7 @@ func (s *CLISuite) startSteerLoopCommandRun(args ...string) <-chan result {
 	return done
 }
 
-// typing runs the steerloopcommand as if a person were at the terminal: each reply is
+// typing runs the steerloop command as if a person were at the terminal: each reply is
 // written to stdin once the given text has appeared on stderr. Closing stdin
 // afterwards lets a session that waits for the next prompt see EOF and exit.
 // This typing is what build the real pipe
@@ -230,12 +230,12 @@ func (s *CLISuite) doneReason(events []event) string {
 func (s *CLISuite) TestRun_GoldenJSONL() {
 
 	cases := map[string][]string{
-		"tool_then_answer": {"--model", script("tool_then_answer.json"), "--tools", toolsYML, "hi"},
-		"finish_tool":      {"--model", script("finish_tool.json"), "--tools", toolsYML, "--stop", "finish-tool", "do the task"},
-		"model_error":      {"--model", script("model_error.json"), "hi"},
-		"max_iterations":   {"--model", script("never_ends.json"), "--tools", toolsYML, "--max-iterations", "2", "loop"},
-		"ask_unanswered":   {"--model", script("ask_user.json"), "--ask", "pick"},
-		"confirm_no_one":   {"--model", script("confirm.json"), "--tools", toolsYML, "clean up"},
+		"tool_then_answer": {"--model", script("tool_then_answer.json"), "--tools", toolsYML, "--prompt", "hi"},
+		"finish_tool":      {"--model", script("finish_tool.json"), "--tools", toolsYML, "--stop", "finish-tool", "--prompt", "do the task"},
+		"model_error":      {"--model", script("model_error.json"), "--prompt", "hi"},
+		"max_iterations":   {"--model", script("never_ends.json"), "--tools", toolsYML, "--max-iterations", "2", "--prompt", "loop"},
+		"ask_unanswered":   {"--model", script("ask_user.json"), "--ask", "--prompt", "pick"},
+		"confirm_no_one":   {"--model", script("confirm.json"), "--tools", toolsYML, "--prompt", "clean up"},
 	}
 
 	for name, args := range cases {
@@ -256,12 +256,12 @@ func (s *CLISuite) TestRun_ExitCodes() {
 		want int
 		args []string
 	}{
-		{"finished", exitOK, []string{"--model", script("tool_then_answer.json"), "--tools", toolsYML, "hi"}},
-		{"model error", exitError, []string{"--model", script("model_error.json"), "hi"}},
-		{"max iterations", exitMaxIterations, []string{"--model", script("never_ends.json"), "--tools", toolsYML, "--max-iterations", "2", "x"}},
-		{"timeout", exitTimeout, []string{"--model", script("nap.json"), "--tools", toolsYML, "--total-timeout", "200ms", "x"}},
-		{"awaiting human", exitAwaitingHuman, []string{"--model", script("ask_user.json"), "--ask", "x"}},
-		{"stopped", exitStopped, []string{"--model", script("slow_tools.json"), "--tools", toolsYML, "--control", stop, "x"}},
+		{"finished", exitOK, []string{"--model", script("tool_then_answer.json"), "--tools", toolsYML, "--prompt", "hi"}},
+		{"model error", exitError, []string{"--model", script("model_error.json"), "--prompt", "hi"}},
+		{"max iterations", exitMaxIterations, []string{"--model", script("never_ends.json"), "--tools", toolsYML, "--max-iterations", "2", "--prompt", "x"}},
+		{"timeout", exitTimeout, []string{"--model", script("nap.json"), "--tools", toolsYML, "--total-timeout", "200ms", "--prompt", "x"}},
+		{"awaiting human", exitAwaitingHuman, []string{"--model", script("ask_user.json"), "--ask", "--prompt", "x"}},
+		{"stopped", exitStopped, []string{"--model", script("slow_tools.json"), "--tools", toolsYML, "--control", stop, "--prompt", "x"}},
 	}
 
 	for _, tc := range cases {
@@ -276,23 +276,24 @@ func (s *CLISuite) TestRun_ExitCodes() {
 func (s *CLISuite) TestRun_UsageErrors() {
 
 	cases := map[string][]string{
-		"--model is required":             {"run", "hi"},
-		"--stop must be":                  {"run", "--model", "script:x", "--stop", "never", "hi"},
-		"--output must be":                {"run", "--model", "script:x", "--output", "xml", "hi"},
-		"--max-iterations must be":        {"run", "--model", "script:x", "--max-iterations", "0", "hi"},
-		"a prompt is required":            {"run", "--model", script("tool_then_answer.json")},
-		"unknown provider":                {"run", "--model", "mystery:m", "hi"},
-		"no such file":                    {"run", "--model", "script:/no/such.json", "hi"},
-		"invalid manifest":                {"run", "--model", script("tool_then_answer.json"), "--tools", testdata + "tool_then_answer.json", "hi"},
-		"read system prompt":              {"run", "--model", script("tool_then_answer.json"), "--system", "/no/such/file", "hi"},
-		"open control file":               {"run", "--model", script("tool_then_answer.json"), "--control", "/no/such/file", "hi"},
-		"open record file":                {"run", "--model", script("tool_then_answer.json"), "--record", "/no/such/dir/r.jsonl", "hi"},
+		"--model is required":             {"run", "--prompt", "hi"},
+		"--stop must be":                  {"run", "--model", "script:x", "--stop", "never", "--prompt", "hi"},
+		"--output must be":                {"run", "--model", "script:x", "--output", "xml", "--prompt", "hi"},
+		"--max-iterations must be":        {"run", "--model", "script:x", "--max-iterations", "0", "--prompt", "hi"},
+		"--prompt is required":            {"run", "--model", script("tool_then_answer.json")},
+		"give the prompt with --prompt":   {"run", "--model", script("tool_then_answer.json"), "--prompt", "clean up", "and more"},
+		"unknown provider":                {"run", "--model", "mystery:m", "--prompt", "hi"},
+		"no such file":                    {"run", "--model", "script:/no/such.json", "--prompt", "hi"},
+		"invalid manifest":                {"run", "--model", script("tool_then_answer.json"), "--tools", testdata + "tool_then_answer.json", "--prompt", "hi"},
+		"read system prompt":              {"run", "--model", script("tool_then_answer.json"), "--system", "/no/such/file", "--prompt", "hi"},
+		"open control file":               {"run", "--model", script("tool_then_answer.json"), "--control", "/no/such/file", "--prompt", "hi"},
+		"open record file":                {"run", "--model", script("tool_then_answer.json"), "--record", "/no/such/dir/r.jsonl", "--prompt", "hi"},
 		"flag provided but not defined":   {"run", "--nope"},
 		"unknown command":                 {"fly"},
 		"usage: steerloop replay":         {"replay"},
 		"usage: steerloop tools validate": {"tools", "check"},
 		"Usage:\n  steerloop run":         {},
-		"which --ask also provides":       {"run", "--model", script("ask_user.json"), "--tools", s.writeManifest("ask_user"), "--ask", "hi"},
+		"which --ask also provides":       {"run", "--model", script("ask_user.json"), "--tools", s.writeManifest("ask_user"), "--ask", "--prompt", "hi"},
 		"recording is empty":              {"replay", s.writeFile("empty.jsonl", "\n")},
 		"line 1:":                         {"replay", s.writeFile("bad.jsonl", "{not json\n")},
 		`missing "type"`:                  {"replay", s.writeFile("untyped.jsonl", "{}\n")},
@@ -317,6 +318,7 @@ func (s *CLISuite) TestHelpVersionAndToolsValidate() {
 	res = s.run("run", "-h")
 	s.Equal(exitOK, res.code)
 	s.Contains(res.stderr, "-max-iterations")
+	s.Contains(res.stderr, "-prompt")
 
 	res = s.run("version")
 	s.Equal(exitOK, res.code)
@@ -333,11 +335,10 @@ func (s *CLISuite) TestHelpVersionAndToolsValidate() {
 	s.Contains(res.stderr, "command is required")
 }
 
-func (s *CLISuite) TestRun_TextOutputAndPromptFromStdin() {
+func (s *CLISuite) TestRun_TextOutput() {
 	system := s.writeFile("system.txt", "Be brief.")
 
-	s.stdin = strings.NewReader("  hi from stdin \n")
-	res := s.run("run", "--model", script("tool_then_answer.json"), "--tools", toolsYML, "--system", system)
+	res := s.run("run", "--model", script("tool_then_answer.json"), "--tools", toolsYML, "--system", system, "--prompt", "hi")
 	s.Require().Equal(exitOK, res.code, res.stderr)
 	s.Equal("The tool printed: hello from the tool\n", res.stdout, "only the final content goes to stdout")
 	s.Contains(res.stderr, "→ say")
@@ -345,14 +346,50 @@ func (s *CLISuite) TestRun_TextOutputAndPromptFromStdin() {
 	s.Contains(res.stderr, "done: finished · 2 step(s) · 310 tokens")
 	s.NotContains(res.stderr, "assistant:", "the final reply is not printed twice")
 
-	s.stdin = strings.NewReader("hi from stdin")
-	res = s.run("run", "--model", script("tool_then_answer.json"), "--tools", toolsYML, "--output", "jsonl", "--system", system)
+	res = s.run("run", "--model", script("tool_then_answer.json"), "--tools", toolsYML, "--output", "jsonl", "--system", system, "--prompt", "hi")
 	turn := eventsOfType(s.parseEvents(res.stdout), "llm_turn")[0]
-	s.Contains(string(turn.Data), `{"role":"system","content":"Be brief."},{"role":"user","content":"hi from stdin"}`)
+	s.Contains(string(turn.Data), `{"role":"system","content":"Be brief."},{"role":"user","content":"hi"}`)
+}
+
+// The prompt is only ever --prompt: not the words after the flags, not stdin.
+func (s *CLISuite) TestRun_PromptFlag() {
+	userTurn := func(res result) string {
+		return string(eventsOfType(s.parseEvents(res.stdout), "llm_turn")[0].Data)
+	}
+	args := []string{"run", "--model", script("tool_then_answer.json"), "--tools", toolsYML, "--output", "jsonl"}
+
+	s.Run("--prompt is the user message, trimmed", func() {
+		res := s.run(append(args, "--prompt", "  clean up ")...)
+		s.Require().Equal(exitOK, res.code, res.stderr)
+		s.Contains(userTurn(res), `{"role":"user","content":"clean up"}`)
+	})
+
+	s.Run("piped stdin is never read as the prompt", func() {
+		s.stdin = strings.NewReader("from stdin")
+		res := s.run(args...)
+		s.Equal(exitUsage, res.code)
+		s.Contains(res.stderr, "--prompt is required")
+		s.Empty(res.stdout, "nothing runs")
+	})
+
+	s.Run("a blank --prompt is missing", func() {
+		res := s.run(append(args, "--prompt", "   ")...)
+		s.Equal(exitUsage, res.code)
+		s.Contains(res.stderr, "--prompt is required")
+	})
+
+	s.Run("words after the flags are rejected, with or without --prompt", func() {
+		for _, extra := range [][]string{{"clean up"}, {"--prompt", "clean up", "the build"}} {
+			res := s.run(append(args, extra...)...)
+			s.Equal(exitUsage, res.code)
+			s.Contains(res.stderr, "give the prompt with --prompt")
+			s.Empty(res.stdout, "nothing runs")
+		}
+	})
 }
 
 func (s *CLISuite) TestRun_FinishToolTextShowsNarration() {
-	res := s.run("run", "--model", script("finish_tool.json"), "--tools", toolsYML, "--stop", "finish-tool", "--verbose", "go")
+	res := s.run("run", "--model", script("finish_tool.json"), "--tools", toolsYML, "--stop", "finish-tool", "--verbose", "--prompt", "go")
 	s.Require().Equal(exitOK, res.code, res.stderr)
 	s.Equal(`{"result":"all done"}`+"\n", res.stdout)
 	s.Contains(res.stderr, "assistant: Let me think about that first.")
@@ -368,7 +405,7 @@ func (s *CLISuite) TestRun_ControlFileSteersTheRun() {
 		`not json`,
 		``,
 	}, "\n"))
-	res := s.run("run", "--model", script("slow_tools.json"), "--tools", toolsYML, "--control", control, "--output", "jsonl", "go")
+	res := s.run("run", "--model", script("slow_tools.json"), "--tools", toolsYML, "--control", control, "--output", "jsonl", "--prompt", "go")
 	s.Require().Equal(exitOK, res.code, res.stderr)
 
 	turns := eventsOfType(s.parseEvents(res.stdout), "llm_turn")
@@ -379,14 +416,14 @@ func (s *CLISuite) TestRun_ControlFileSteersTheRun() {
 	s.Contains(res.stderr, "control line 4 ignored")
 
 	raise := s.writeFile("raise.jsonl", `{"type":"modify_config","max_iterations":1,"wait_ms":100}`+"\n")
-	res = s.run("run", "--model", script("slow_tools.json"), "--tools", toolsYML, "--control", raise, "--output", "jsonl", "go")
+	res = s.run("run", "--model", script("slow_tools.json"), "--tools", toolsYML, "--control", raise, "--output", "jsonl", "--prompt", "go")
 	s.Equal(exitMaxIterations, res.code)
 	s.Equal("max_iterations", s.doneReason(s.parseEvents(res.stdout)))
 }
 
 // C5: ask_user and confirm prompts are answered from the terminal.
 func (s *CLISuite) TestRun_AskUserOnTerminal() {
-	res := s.typing([]string{"run", "--model", script("ask_user.json"), "--ask", "pick"},
+	res := s.typing([]string{"run", "--model", script("ask_user.json"), "--ask", "--prompt", "pick"},
 		[2]string{"? Which colour? [red / blue]", "blue"})
 	s.Require().Equal(exitOK, res.code, res.stderr)
 	s.Equal("You chose blue.\n", res.stdout)
@@ -394,7 +431,7 @@ func (s *CLISuite) TestRun_AskUserOnTerminal() {
 }
 
 func (s *CLISuite) TestRun_ConfirmOnTerminal() {
-	args := []string{"run", "--model", script("confirm.json"), "--tools", toolsYML, "clean"}
+	args := []string{"run", "--model", script("confirm.json"), "--tools", toolsYML, "--prompt", "clean"}
 
 	res := s.typing(args, [2]string{`? Run danger {"target":"build/"}? [y / n]`, "y"})
 	s.Require().Equal(exitOK, res.code, res.stderr)
@@ -406,7 +443,7 @@ func (s *CLISuite) TestRun_ConfirmOnTerminal() {
 	s.NotContains(res.stderr, "removed build/")
 
 	s.reset()
-	res = s.run("run", "--yes", "--model", script("confirm.json"), "--tools", toolsYML, "clean")
+	res = s.run("run", "--yes", "--model", script("confirm.json"), "--tools", toolsYML, "--prompt", "clean")
 	s.Contains(res.stderr, "← danger: removed build/", "--yes approves without asking")
 
 	res = s.run(args...)
@@ -415,7 +452,7 @@ func (s *CLISuite) TestRun_ConfirmOnTerminal() {
 }
 
 func (s *CLISuite) TestRun_SlashCommandsOnTerminal() {
-	res := s.typing([]string{"run", "--model", script("ask_user.json"), "--ask", "pick"},
+	res := s.typing([]string{"run", "--model", script("ask_user.json"), "--ask", "--prompt", "pick"},
 		[2]string{"? Which colour?", "/bogus"},
 		[2]string{"unknown command /bogus", "/max nope"},
 		[2]string{"usage: /max", "/temp x"},
@@ -433,7 +470,7 @@ func (s *CLISuite) TestRun_SlashCommandsOnTerminal() {
 // A finished answer on a terminal waits for the next prompt and keeps the history.
 func (s *CLISuite) TestRun_SessionReadsTheNextPrompt() {
 	scriptPath := s.writeFile("two.json", `{"steps":[{"content":"four"},{"content":"six"}]}`+"\n")
-	res := s.typing([]string{"run", "--model", "script:" + scriptPath, "2+2"},
+	res := s.typing([]string{"run", "--model", "script:" + scriptPath, "--prompt", "2+2"},
 		[2]string{"> ", "3+3"},
 	)
 	s.Require().Equal(exitOK, res.code, res.stderr)
@@ -444,11 +481,11 @@ func (s *CLISuite) TestRun_SessionReadsTheNextPrompt() {
 // C6: a replay prints what the live run printed, without a model or a tool.
 func (s *CLISuite) TestReplay_MatchesLiveRun() {
 	for _, tc := range [][]string{
-		{"--model", script("tool_then_answer.json"), "--tools", toolsYML, "hi"},
-		{"--model", script("finish_tool.json"), "--tools", toolsYML, "--stop", "finish-tool", "go"},
-		{"--model", script("never_ends.json"), "--tools", toolsYML, "--max-iterations", "2", "x"},
-		{"--model", script("ask_user.json"), "--ask", "x"},
-		{"--model", script("model_error.json"), "x"},
+		{"--model", script("tool_then_answer.json"), "--tools", toolsYML, "--prompt", "hi"},
+		{"--model", script("finish_tool.json"), "--tools", toolsYML, "--stop", "finish-tool", "--prompt", "go"},
+		{"--model", script("never_ends.json"), "--tools", toolsYML, "--max-iterations", "2", "--prompt", "x"},
+		{"--model", script("ask_user.json"), "--ask", "--prompt", "x"},
+		{"--model", script("model_error.json"), "--prompt", "x"},
 	} {
 		recording := filepath.Join(s.T().TempDir(), "run.jsonl")
 		live := s.run(append([]string{"run", "--record", recording}, tc...)...)
@@ -467,16 +504,16 @@ func (s *CLISuite) TestReplay_MatchesLiveRun() {
 
 // C7: a missing key fails before any call, and a key never reaches the output.
 func (s *CLISuite) TestRun_APIKeys() {
-	res := s.run("run", "--model", "anthropic:some-model", "hi")
+	res := s.run("run", "--model", "anthropic:some-model", "--prompt", "hi")
 	s.Equal(exitUsage, res.code)
 	s.Contains(res.stderr, "ANTHROPIC_API_KEY is not set")
-	res = s.run("run", "--model", "openai:some-model", "hi")
+	res = s.run("run", "--model", "openai:some-model", "--prompt", "hi")
 	s.Contains(res.stderr, "OPENAI_API_KEY is not set")
 
 	const secret = "sk-test-secret-value-123"
 	recording := filepath.Join(s.T().TempDir(), "run.jsonl")
 	s.vars = map[string]string{"ANTHROPIC_API_KEY": secret, "OPENAI_API_KEY": secret}
-	res = s.run("run", "--verbose", "--record", recording, "--model", script("tool_then_answer.json"), "--tools", toolsYML, "hi")
+	res = s.run("run", "--verbose", "--record", recording, "--model", script("tool_then_answer.json"), "--tools", toolsYML, "--prompt", "hi")
 	s.Require().Equal(exitOK, res.code)
 	recorded, err := os.ReadFile(recording)
 	s.Require().NoError(err)
@@ -497,7 +534,7 @@ func (s *CLISuite) TestRun_LiveSmoke() {
 		"ANTHROPIC_API_KEY": os.Getenv("ANTHROPIC_API_KEY"),
 		"OPENAI_API_KEY":    os.Getenv("OPENAI_API_KEY"),
 	}
-	res := s.run("run", "--output", "jsonl", "--model", modelSpec, "--tools", toolsYML,
+	res := s.run("run", "--output", "jsonl", "--model", modelSpec, "--tools", toolsYML, "--prompt",
 		`Use the say tool to print exactly "live check", then tell me what it printed.`)
 	s.Require().Equal(exitOK, res.code, res.stderr)
 	events := s.parseEvents(res.stdout)
@@ -511,7 +548,7 @@ func (s *CLISuite) TestRun_Interrupts() {
 		s.Run(name, func() {
 			signals := make(chan os.Signal, 2)
 			s.signals = signals
-			done := s.startSteerLoopCommandRun("run", "--model", script("nap.json"), "--tools", toolsYML, "rest")
+			done := s.startSteerLoopCommandRun("run", "--model", script("nap.json"), "--tools", toolsYML, "--prompt", "rest")
 
 			s.waitForStderr("→ nap")
 			start := time.Now()

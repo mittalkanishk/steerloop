@@ -32,6 +32,7 @@ var stopConditions = map[string]steerloop.StopCondition{
 func runFlags(stderr io.Writer, opts *runOptions) *flag.FlagSet {
 	flags := flag.NewFlagSet("steerloop run", flag.ContinueOnError)
 	flags.SetOutput(stderr)
+	flags.StringVar(&opts.prompt, "prompt", "", "the prompt for the first turn (required)")
 	flags.StringVar(&opts.model, "model", "", "anthropic:<model>, openai:<model> or script:<path> (required)")
 	flags.StringVar(&opts.manifestPath, "tools", "", "path to a tool manifest (YAML)")
 	flags.StringVar(&opts.systemPromptPath, "system", "", "path to a system prompt file")
@@ -48,7 +49,7 @@ func runFlags(stderr io.Writer, opts *runOptions) *flag.FlagSet {
 	flags.StringVar(&opts.controlPath, "control", "", "read JSONL controls from this file or FIFO")
 	flags.BoolVar(&opts.verbose, "verbose", false, "write the loop's debug log to stderr")
 	flags.Usage = func() {
-		fmt.Fprintln(stderr, "usage: steerloop run [flags] [prompt]\n\nFlags go before the prompt. With no prompt argument the prompt is read from stdin.")
+		fmt.Fprintln(stderr, "usage: steerloop run --model <spec> --prompt <text> [flags]\n\nThe prompt is always given with --prompt; stdin stays free for answering the run.")
 		flags.PrintDefaults()
 	}
 	return flags
@@ -60,6 +61,8 @@ func (o runOptions) validate() error {
 	switch {
 	case o.model == "":
 		return errors.New("--model is required")
+	case strings.TrimSpace(o.prompt) == "":
+		return errors.New("--prompt is required")
 	case !knownStop:
 		return errors.New("--stop must be no-tool-calls, finish-tool or explicit")
 	case o.outputFormat != "text" && o.outputFormat != "jsonl":
@@ -80,15 +83,15 @@ func runCommand(e env, args []string) int {
 		return exitUsage // the flag package has already reported the problem
 	}
 
+	if rest := flags.Args(); len(rest) > 0 {
+		return usageError(e.stderr, fmt.Errorf("unexpected argument %q: give the prompt with --prompt", strings.Join(rest, " ")))
+	}
 	if err := opts.validate(); err != nil {
 		return usageError(e.stderr, err)
 	}
 	stop := stopConditions[opts.stopName]
 
-	prompt, promptFromStdin, err := readPrompt(e, flags.Args())
-	if err != nil {
-		return usageError(e.stderr, err)
-	}
+	prompt := strings.TrimSpace(opts.prompt)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -100,7 +103,7 @@ func runCommand(e env, args []string) int {
 
 	// Someone can answer the model's questions at the terminal, or through
 	// the control file.
-	interactive := e.stdinIsTerminal && !promptFromStdin && e.stdin != nil
+	interactive := e.stdinIsTerminal && e.stdin != nil
 	humanAvailable := interactive || opts.controlPath != ""
 
 	tools, err := buildToolset(opts, stop, humanAvailable)
@@ -223,25 +226,6 @@ func runCommand(e env, args []string) int {
 func usageError(stderr io.Writer, err error) int {
 	fmt.Fprintf(stderr, "steerloop: %v\n", err)
 	return exitUsage
-}
-
-// readPrompt takes the prompt from the arguments, or from stdin when it is
-// piped. It reports whether stdin was used, since that stdin can then not
-// serve as the terminal.
-func readPrompt(e env, args []string) (prompt string, fromStdin bool, err error) {
-	prompt = strings.TrimSpace(strings.Join(args, " "))
-	if prompt == "" && !e.stdinIsTerminal && e.stdin != nil {
-		data, err := io.ReadAll(e.stdin)
-		if err != nil {
-			return "", false, fmt.Errorf("read prompt: %w", err)
-		}
-		prompt = strings.TrimSpace(string(data))
-		fromStdin = true
-	}
-	if prompt == "" {
-		return "", false, errors.New("a prompt is required, as an argument or on stdin")
-	}
-	return prompt, fromStdin, nil
 }
 
 func buildToolset(opts runOptions, stop steerloop.StopCondition, humanAvailable bool) (toolset, error) {
