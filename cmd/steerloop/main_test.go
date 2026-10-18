@@ -21,17 +21,16 @@ const (
 	toolsYML = testdata + "tools.yaml"
 )
 
-// CLISuite runs the steerloop command the way a shell would: with its own
-// stdin, environment and signals, and reads back what it printed and how it
+// CLISuite runs the steerloop command the way a shell would and that is what makes it a harness: 
+// with its own stdin, environment and signals, and reads back what it printed and how it
 // exited. Every test starts with nothing piped in, no terminal, no variables
-// and no signals, so a test states only what is particular to its own
-// scenario.
+// and no signals, so a test states only what is particular to its own scenario.
+
 type CLISuite struct {
 	suite.Suite
 	stdin  io.Reader   // stdin is what the command reads. Nil means nothing is piped in.
 	stdout *SyncBuffer // stdout and stderr collect what the current run prints. They can be read while the run is still going.
 	stderr *SyncBuffer
-
 	terminal bool              // terminal reports stdin as a terminal, so the command prompts on it.
 	vars     map[string]string // vars is the command's environment.
 	signals  <-chan os.Signal  // signals is what the command receives as interrupts.

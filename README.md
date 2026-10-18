@@ -1,8 +1,10 @@
 # steerloop
 
-A controllable agent harness for Go, built on [CloudWeGo Eino](https://github.com/cloudwego/eino).
+**The loop inside Claude Code, in 2,000 lines of Go you can read in a weekend.**
 
-A `harness` (or loop) calls a tool-calling chat model, runs the tools it asks for, feeds the results back and repeats. What this package adds is control over a run that is already in flight:
+Every agentic CLI (Claude Code, Codex, Cursor's agent, aider) is the same thing: a loop that calls a model, runs the tool it asked for, feeds the result back and repeats. In the real tools that loop is buried under a hundred thousand lines of UI and telemetry. steerloop is the loop on its own: the permission prompt, Esc, typing while it works, the transcript file, the retry after a 529, each one a test you can read and thirty lines you can change. The model is an interface, so a JSON file can play it: every behaviour runs offline, in seconds, for free.
+
+It is the specimen for the video series *How Claude Code Works*. It is also a library: a controllable agent harness built on [CloudWeGo Eino](https://github.com/cloudwego/eino), with control over a run that is already in flight:
 
 - **Steer it.** Stop it, inject a user message, or change its iteration cap and temperature while it runs.
 - **Watch it.** A typed event stream: model turns, tool calls, tool results, the final outcome.
