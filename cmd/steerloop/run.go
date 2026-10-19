@@ -16,8 +16,8 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"github.com/mittalkanishk/steerloop"
-	"github.com/mittalkanishk/steerloop/internal/exectool"
 	"github.com/mittalkanishk/steerloop/internal/provider"
+	exectool "github.com/mittalkanishk/steerloop/internal/tools"
 )
 
 const askUserToolName = "ask_user"
@@ -26,6 +26,170 @@ var stopConditions = map[string]steerloop.StopCondition{
 	"no-tool-calls": steerloop.StopOnNoToolCalls,
 	"finish-tool":   steerloop.StopOnFinishTool,
 	"explicit":      steerloop.StopOnExplicit,
+}
+
+func runCommand(e env, args []string) int {
+
+	var opts runOptions
+
+	flags := runFlags(e.stderr, &opts)
+
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return exitOK
+		}
+		return exitUsage // the flag package has already reported the problem
+	}
+
+	leftoverFlagArgs := flags.Args()
+	if len(leftoverFlagArgs) > 0 {
+		return usageError(e.stderr, fmt.Errorf("unexpected argument %q: give the prompt with --prompt", strings.Join(leftoverFlagArgs, " ")))
+	}
+
+	if err := opts.validate(); err != nil {
+		return usageError(e.stderr, err)
+	}
+
+	stop := stopConditions[opts.stopName]
+	prompt := strings.TrimSpace(opts.prompt)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	llm, err := provider.Build(ctx, opts.model, provider.Options{Getenv: e.getenv, MaxTokens: opts.maxTokens})
+	if err != nil {
+		return usageError(e.stderr, err)
+	}
+
+	// Someone can answer the model's questions at the terminal, or through
+	// the control file.
+	interactive := e.stdinIsTerminal && e.stdin != nil
+	humanAvailable := interactive || opts.controlPath != ""
+
+	tools, err := buildToolset(opts, stop, humanAvailable)
+	if err != nil {
+		return usageError(e.stderr, err)
+	}
+
+	var messages []*schema.Message
+	if opts.systemPromptPath != "" {
+		systemPrompt, err := os.ReadFile(opts.systemPromptPath)
+		if err != nil {
+			return usageError(e.stderr, fmt.Errorf("read system prompt: %w", err))
+		}
+		messages = append(messages, &schema.Message{Role: schema.System, Content: string(systemPrompt)})
+	}
+
+	messages = append(messages, &schema.Message{Role: schema.User, Content: prompt})
+
+	emit, closeOutputs, err := openOutputs(e, opts)
+	if err != nil {
+		return usageError(e.stderr, err)
+	}
+	defer closeOutputs()
+
+	var controlFile *os.File
+
+	if opts.controlPath != "" {
+		if controlFile, err = os.Open(opts.controlPath); err != nil {
+			return usageError(e.stderr, fmt.Errorf("open control file: %w", err))
+		}
+		defer controlFile.Close()
+	}
+
+	var logger *slog.Logger
+	if opts.verbose {
+		logger = slog.New(slog.NewTextHandler(e.stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	}
+
+	// A terminal with no control file stays up after an answer and reads the
+	// next prompt. Anything else is one turn.
+	multiTurn := interactive && controlFile == nil
+	var terminalLines <-chan string
+
+	if multiTurn {
+		terminalLines = scanLines(e.stdin)
+	}
+
+	emit(headerRecord(runHeader{
+		Version:       moduleVersion(),
+		Model:         opts.model,
+		Stop:          opts.stopName,
+		MaxIterations: opts.maxIterations,
+		Tools:         tools.names,
+		Prompt:        prompt,
+	}))
+
+	interrupts := watchInterrupts(ctx, cancel, e.signals, e.stderr)
+
+	cfg := loopConfig(opts, stop, llm, tools.pauses)
+
+	for {
+
+		loop, err := steerloop.New(cfg, llm.Chat, tools.infos, tools.executor, logger)
+		if err != nil {
+			return usageError(e.stderr, err)
+		}
+
+		interrupts.running.Store(loop)
+		events := loop.Start(ctx, messages)
+
+		steer := &controller{
+			loop:   loop,
+			stderr: e.stderr,
+		}
+
+		// Steering comes from the control file, or from lines typed at the
+		// terminal while the turn runs.
+		var stopForwarding, forwardingDone chan struct{}
+		if controlFile != nil {
+			go steer.readControls(ctx, controlFile)
+		} else if multiTurn {
+			stopForwarding = make(chan struct{})
+			forwardingDone = make(chan struct{})
+			go func() {
+				defer close(forwardingDone)
+				steer.forwardLines(ctx, terminalLines, stopForwarding)
+			}()
+		}
+
+		for evt := range events {
+			rec, err := toRecord(evt)
+			if err != nil {
+				fmt.Fprintf(e.stderr, "steerloop: cannot encode %s event: %v\n", evt.Type, err)
+				continue
+			}
+			emit(rec)
+		}
+
+		if stopForwarding != nil {
+			close(stopForwarding)
+			<-forwardingDone
+		}
+
+		if interrupts.wasAborted() {
+			return exitStopped
+		}
+
+		result, _ := loop.Result()
+		if result.Reason != steerloop.DoneReasonFinished || !multiTurn {
+			return exitCodeFor(result.Reason)
+		}
+
+		// The answer is in. Wait for the next prompt and carry the
+		// conversation forward into a fresh loop.
+		interrupts.atPrompt.Store(true)
+		interrupts.running.Store(nil)
+		nextPrompt, ok := readNextPrompt(ctx, e.stderr, terminalLines)
+		interrupts.atPrompt.Store(false)
+		if !ok {
+			if ctx.Err() != nil {
+				return exitStopped
+			}
+			return exitOK
+		}
+
+		messages = append(loop.GetRunningMessages(), &schema.Message{Role: schema.User, Content: nextPrompt})
+	}
 }
 
 // runFlags declares the flags of `steerloop run` and binds them to opts.
@@ -73,154 +237,6 @@ func (o runOptions) validate() error {
 	return nil
 }
 
-func runCommand(e env, args []string) int {
-	var opts runOptions
-	flags := runFlags(e.stderr, &opts)
-	if err := flags.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return exitOK
-		}
-		return exitUsage // the flag package has already reported the problem
-	}
-
-	if rest := flags.Args(); len(rest) > 0 {
-		return usageError(e.stderr, fmt.Errorf("unexpected argument %q: give the prompt with --prompt", strings.Join(rest, " ")))
-	}
-	if err := opts.validate(); err != nil {
-		return usageError(e.stderr, err)
-	}
-	stop := stopConditions[opts.stopName]
-
-	prompt := strings.TrimSpace(opts.prompt)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	llm, err := provider.Build(ctx, opts.model, provider.Options{Getenv: e.getenv, MaxTokens: opts.maxTokens})
-	if err != nil {
-		return usageError(e.stderr, err)
-	}
-
-	// Someone can answer the model's questions at the terminal, or through
-	// the control file.
-	interactive := e.stdinIsTerminal && e.stdin != nil
-	humanAvailable := interactive || opts.controlPath != ""
-
-	tools, err := buildToolset(opts, stop, humanAvailable)
-	if err != nil {
-		return usageError(e.stderr, err)
-	}
-
-	var messages []*schema.Message
-	if opts.systemPromptPath != "" {
-		systemPrompt, err := os.ReadFile(opts.systemPromptPath)
-		if err != nil {
-			return usageError(e.stderr, fmt.Errorf("read system prompt: %w", err))
-		}
-		messages = append(messages, &schema.Message{Role: schema.System, Content: string(systemPrompt)})
-	}
-	messages = append(messages, &schema.Message{Role: schema.User, Content: prompt})
-
-	emit, closeOutputs, err := openOutputs(e, opts)
-	if err != nil {
-		return usageError(e.stderr, err)
-	}
-	defer closeOutputs()
-
-	var controlFile *os.File
-	if opts.controlPath != "" {
-		if controlFile, err = os.Open(opts.controlPath); err != nil {
-			return usageError(e.stderr, fmt.Errorf("open control file: %w", err))
-		}
-		defer controlFile.Close()
-	}
-
-	var logger *slog.Logger
-	if opts.verbose {
-		logger = slog.New(slog.NewTextHandler(e.stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	}
-
-	// A terminal with no control file stays up after an answer and reads the
-	// next prompt. Anything else is one turn.
-	multiTurn := interactive && controlFile == nil
-	var terminalLines <-chan string
-	if multiTurn {
-		terminalLines = scanLines(e.stdin)
-	}
-
-	emit(headerRecord(runHeader{
-		Version:       moduleVersion(),
-		Model:         opts.model,
-		Stop:          opts.stopName,
-		MaxIterations: opts.maxIterations,
-		Tools:         tools.names,
-		Prompt:        prompt,
-	}))
-
-	interrupts := watchInterrupts(ctx, cancel, e.signals, e.stderr)
-	cfg := loopConfig(opts, stop, llm, tools.pauses)
-
-	for {
-		loop, err := steerloop.New(cfg, llm.Chat, tools.infos, tools.executor, logger)
-		if err != nil {
-			return usageError(e.stderr, err)
-		}
-		interrupts.running.Store(loop)
-
-		events := loop.Start(ctx, messages)
-		steer := &controller{loop: loop, stderr: e.stderr}
-
-		// Steering comes from the control file, or from lines typed at the
-		// terminal while the turn runs.
-		var stopForwarding, forwardingDone chan struct{}
-		if controlFile != nil {
-			go steer.readControls(ctx, controlFile)
-		} else if multiTurn {
-			stopForwarding = make(chan struct{})
-			forwardingDone = make(chan struct{})
-			go func() {
-				defer close(forwardingDone)
-				steer.forwardLines(ctx, terminalLines, stopForwarding)
-			}()
-		}
-
-		for evt := range events {
-			rec, err := toRecord(evt)
-			if err != nil {
-				fmt.Fprintf(e.stderr, "steerloop: cannot encode %s event: %v\n", evt.Type, err)
-				continue
-			}
-			emit(rec)
-		}
-		if stopForwarding != nil {
-			close(stopForwarding)
-			<-forwardingDone
-		}
-
-		if interrupts.wasAborted() {
-			return exitStopped
-		}
-		result, _ := loop.Result()
-		if result.Reason != steerloop.DoneReasonFinished || !multiTurn {
-			return exitCodeFor(result.Reason)
-		}
-
-		// The answer is in. Wait for the next prompt and carry the
-		// conversation forward into a fresh loop.
-		interrupts.atPrompt.Store(true)
-		interrupts.running.Store(nil)
-		nextPrompt, ok := readNextPrompt(ctx, e.stderr, terminalLines)
-		interrupts.atPrompt.Store(false)
-		if !ok {
-			if ctx.Err() != nil {
-				return exitStopped
-			}
-			return exitOK
-		}
-		messages = append(loop.GetRunningMessages(), &schema.Message{Role: schema.User, Content: nextPrompt})
-	}
-}
-
 // usageError reports err the way every refusal of this command is reported
 // and returns the exit code for it.
 func usageError(stderr io.Writer, err error) int {
@@ -236,7 +252,7 @@ func buildToolset(opts runOptions, stop steerloop.StopCondition, humanAvailable 
 		}),
 	}
 
-	var manifest *exectool.Manifest
+	var manifest *exectool.ToolManifestExecutor
 	if opts.manifestPath != "" {
 		var err error
 		if manifest, err = exectool.Load(opts.manifestPath); err != nil {
@@ -248,7 +264,7 @@ func buildToolset(opts runOptions, stop steerloop.StopCondition, humanAvailable 
 		tools.executor = manifest
 		for _, t := range manifest.Tools {
 			tools.names = append(tools.names, t.Name)
-			if t.Confirm {
+			if t.RequiresConfirmation {
 				tools.pauses[t.Name] = confirmPause(opts.autoApprove, humanAvailable)
 			}
 		}

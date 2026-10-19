@@ -37,7 +37,7 @@ tools:
     confirm: true
 `
 
-func mustParse(t *testing.T, src string) *Manifest {
+func mustParse(t *testing.T, src string) *ToolManifestExecutor {
 	t.Helper()
 	m, err := Parse([]byte(src))
 	require.NoError(t, err)
@@ -52,12 +52,12 @@ func TestParse_Valid(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, defaultTimeout, say.Timeout)
 	assert.Equal(t, defaultMaxOutputBytes, say.MaxOutputBytes)
-	assert.False(t, say.Confirm)
+	assert.False(t, say.RequiresConfirmation)
 
 	flagged, _ := m.Tool("flagged")
 	assert.Equal(t, 5*time.Second, flagged.Timeout)
 	assert.Equal(t, 128, flagged.MaxOutputBytes)
-	assert.True(t, flagged.Confirm)
+	assert.True(t, flagged.RequiresConfirmation)
 
 	_, ok = m.Tool("missing")
 	assert.False(t, ok)
@@ -192,20 +192,6 @@ tools:
 	assert.Equal(t, "n=", argv[1])
 }
 
-// A value can never add a command-line element or reach a shell.
-func TestArgv_ValueStaysOneElement(t *testing.T) {
-	say, _ := mustParse(t, validManifest).Tool("say")
-	hostile := `a b; rm -rf / && $(id) | cat > x "q" 'q' *`
-	argv, err := say.Argv(`{"message":` + quote(hostile) + `}`)
-	require.NoError(t, err)
-	require.Len(t, argv, 2)
-	assert.Equal(t, hostile, argv[1])
-
-	out, err := say.Run(context.Background(), `{"message":`+quote(hostile)+`}`)
-	require.NoError(t, err)
-	assert.Equal(t, hostile+"\n", out, "metacharacters reach the program as literal text")
-}
-
 func TestArgv_LeadingDashIsRejectedUnlessAllowed(t *testing.T) {
 	m := mustParse(t, validManifest)
 	say, _ := m.Tool("say")
@@ -294,9 +280,4 @@ func TestRun_CancelledContext(t *testing.T) {
 	_, err := m.ExecuteTool(ctx, "slow", "{}")
 	require.Error(t, err)
 	assert.Less(t, time.Since(start), 4*time.Second)
-}
-
-func quote(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
 }

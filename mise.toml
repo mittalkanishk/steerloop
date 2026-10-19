@@ -22,6 +22,10 @@ file = ".mise/scripts/git-tag-release.sh"
 description = "Run the local steerloop pkg binary"
 run = "go run ./cmd/steerloop"
 
+[tasks.steerloop2]
+description = "Run the local steerloop2 binary"
+run = "go run ./cmd/steerloop2"
+
 [tasks.steerloop-record-run]
 description = "Record a local run to run.jsonl. Flags after -- are passed through."
 run = "go run ./cmd/steerloop run --record run.jsonl"

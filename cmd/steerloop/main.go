@@ -10,7 +10,7 @@ import (
 	"runtime/debug"
 	"syscall"
 
-	"github.com/mittalkanishk/steerloop/internal/exectool"
+	exectool "github.com/mittalkanishk/steerloop/internal/tools"
 )
 
 // Exit codes.
@@ -36,7 +36,9 @@ Run "steerloop run -h" for the flags of run.
 `
 
 func main() {
+
 	signals := make(chan os.Signal, 2)
+
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 
 	stat, _ := os.Stdin.Stat()
@@ -61,18 +63,24 @@ func dispatch(e env, args []string) int {
 	}
 
 	switch args[0] {
+
 	case "run":
 		return runCommand(e, args[1:])
+
 	case "replay":
 		return replayCommand(e, args[1:])
+
 	case "tools":
 		return toolsCommand(e, args[1:])
+
 	case "version", "--version":
 		fmt.Fprintf(e.stdout, "steerloop %s (%s)\n", moduleVersion(), runtime.Version())
 		return exitOK
+
 	case "help", "-h", "--help":
 		fmt.Fprint(e.stdout, usage)
 		return exitOK
+
 	default:
 		fmt.Fprintf(e.stderr, "steerloop: unknown command %q\n\n%s", args[0], usage)
 		return exitUsage
@@ -99,7 +107,7 @@ func toolsCommand(e env, args []string) int {
 	fmt.Fprintf(e.stdout, "ok: %d tool(s)\n", len(m.Tools))
 	for _, t := range m.Tools {
 		confirm := ""
-		if t.Confirm {
+		if t.RequiresConfirmation {
 			confirm = " (asks before running)"
 		}
 		fmt.Fprintf(e.stdout, "  %s: %s%s\n", t.Name, t.Command[0], confirm)
