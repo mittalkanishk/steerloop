@@ -3,9 +3,11 @@ package exectool
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 	"text/template"
@@ -25,45 +27,71 @@ const (
 var toolNameRE = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 
 // Manifest is a parsed tool manifest.
-type Manifest struct {
+type ToolManifestExecutor struct {
 	Tools []*Tool
 }
 
-// Tool is one declared command-line tool.
-type Tool struct {
-	Name           string
-	Description    string
-	Parameters     map[string]any
-	Command        []string
-	Timeout        time.Duration
-	Workdir        string
-	MaxOutputBytes int
-	Confirm        bool
-	// AllowFlagValues lets an argument value begin with "-". Off by default,
-	// so a model cannot turn a value into a command-line option.
-	AllowFlagValues bool
+// ExecuteTool runs the named tool with JSON arguments. It satisfies
+// steerloop.ToolExecutor.
+func (m *ToolManifestExecutor) ExecuteTool(ctx context.Context, name string, arguments string) (string, error) {
+	t, ok := m.Tool(name)
+	if !ok {
+		return "", fmt.Errorf("unknown tool %q", name)
+	}
+	argv, err := t.Argv(arguments)
+	if err != nil {
+		return "", err
+	}
 
-	templates []*template.Template
+	runCtx, cancel := context.WithTimeout(ctx, t.Timeout)
+	defer cancel()
+
+	out := &cappedBuffer{
+		limit: t.MaxOutputBytes,
+	}
+	cmd := exec.CommandContext(runCtx, argv[0], argv[1:]...)
+	cmd.Dir = t.Workdir
+	cmd.Stdout = out
+	cmd.Stderr = out
+	cmd.WaitDelay = 2 * time.Second
+
+	runErr := cmd.Run()
+	output := out.String()
+	switch {
+	case runErr == nil:
+		return output, nil
+	case errors.Is(runCtx.Err(), context.DeadlineExceeded):
+		return output, fmt.Errorf("timed out after %s\n%s", t.Timeout, output)
+	default:
+		return output, fmt.Errorf("%v\n%s", runErr, output)
+	}
 }
 
-type rawManifest struct {
-	Tools []rawTool `yaml:"tools"`
+// Tool returns the tool with the given name.
+func (m *ToolManifestExecutor) Tool(name string) (*Tool, bool) {
+	for _, t := range m.Tools {
+		if t.Name == name {
+			return t, true
+		}
+	}
+	return nil, false
 }
 
-type rawTool struct {
-	Name            string         `yaml:"name"`
-	Description     string         `yaml:"description"`
-	Parameters      map[string]any `yaml:"parameters"`
-	Command         []string       `yaml:"command"`
-	Timeout         string         `yaml:"timeout"`
-	Workdir         string         `yaml:"workdir"`
-	MaxOutputBytes  int            `yaml:"max_output_bytes"`
-	Confirm         bool           `yaml:"confirm"`
-	AllowFlagValues bool           `yaml:"allow_flag_values"`
+// ToolInfos returns the Eino definitions of every tool, for binding to a model.
+func (m *ToolManifestExecutor) ToolInfos() ([]*schema.ToolInfo, error) {
+	infos := make([]*schema.ToolInfo, 0, len(m.Tools))
+	for _, t := range m.Tools {
+		info, err := steerloop.NewToolInfo(t.Name, t.Description, t.Parameters)
+		if err != nil {
+			return nil, err
+		}
+		infos = append(infos, info)
+	}
+	return infos, nil
 }
 
 // Load reads and validates a manifest file.
-func Load(path string) (*Manifest, error) {
+func Load(path string) (*ToolManifestExecutor, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -77,7 +105,7 @@ func Load(path string) (*Manifest, error) {
 
 // Parse decodes and validates a manifest. Every problem found is reported, not
 // only the first.
-func Parse(data []byte) (*Manifest, error) {
+func Parse(data []byte) (*ToolManifestExecutor, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	var raw rawManifest
@@ -90,7 +118,7 @@ func Parse(data []byte) (*Manifest, error) {
 
 	var problems []string
 	seen := map[string]bool{}
-	m := &Manifest{}
+	m := &ToolManifestExecutor{}
 	for i, rt := range raw.Tools {
 		label := fmt.Sprintf("tool %d (%s)", i+1, rt.Name)
 		fail := func(format string, args ...any) {
@@ -98,15 +126,15 @@ func Parse(data []byte) (*Manifest, error) {
 		}
 
 		t := &Tool{
-			Name:            rt.Name,
-			Description:     rt.Description,
-			Parameters:      rt.Parameters,
-			Command:         rt.Command,
-			Workdir:         rt.Workdir,
-			MaxOutputBytes:  rt.MaxOutputBytes,
-			Confirm:         rt.Confirm,
-			AllowFlagValues: rt.AllowFlagValues,
-			Timeout:         defaultTimeout,
+			Name:                 rt.Name,
+			Description:          rt.Description,
+			Parameters:           rt.Parameters,
+			Command:              rt.Command,
+			Workdir:              rt.Workdir,
+			MaxOutputBytes:       rt.MaxOutputBytes,
+			RequiresConfirmation: rt.Confirm,
+			AllowFlagValues:      rt.AllowFlagValues,
+			Timeout:              defaultTimeout,
 		}
 
 		switch {
@@ -174,59 +202,6 @@ func checkParameters(params map[string]any) error {
 		if _, isMap := props.(map[string]any); !isMap {
 			return errors.New(`"properties" must be a mapping`)
 		}
-	}
-	return nil
-}
-
-// Tool returns the tool with the given name.
-func (m *Manifest) Tool(name string) (*Tool, bool) {
-	for _, t := range m.Tools {
-		if t.Name == name {
-			return t, true
-		}
-	}
-	return nil, false
-}
-
-// ToolInfos returns the Eino definitions of every tool, for binding to a model.
-func (m *Manifest) ToolInfos() ([]*schema.ToolInfo, error) {
-	infos := make([]*schema.ToolInfo, 0, len(m.Tools))
-	for _, t := range m.Tools {
-		info, err := steerloop.NewToolInfo(t.Name, t.Description, t.Parameters)
-		if err != nil {
-			return nil, err
-		}
-		infos = append(infos, info)
-	}
-	return infos, nil
-}
-
-// properties returns the declared parameter schemas by name.
-func (t *Tool) properties() map[string]map[string]any {
-	out := map[string]map[string]any{}
-	props, _ := t.Parameters["properties"].(map[string]any)
-	for name, v := range props {
-		if spec, ok := v.(map[string]any); ok {
-			out[name] = spec
-		} else {
-			out[name] = map[string]any{}
-		}
-	}
-	return out
-}
-
-func (t *Tool) required() []string {
-	switch req := t.Parameters["required"].(type) {
-	case []string:
-		return req
-	case []any:
-		out := make([]string, 0, len(req))
-		for _, r := range req {
-			if s, ok := r.(string); ok {
-				out = append(out, s)
-			}
-		}
-		return out
 	}
 	return nil
 }

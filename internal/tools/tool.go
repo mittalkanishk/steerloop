@@ -2,56 +2,46 @@ package exectool
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
-	"os/exec"
 	"sort"
 	"strings"
+	"text/template"
 	"time"
 )
 
-// ExecuteTool runs the named tool with JSON arguments. It satisfies
-// steerloop.ToolExecutor.
-func (m *Manifest) ExecuteTool(ctx context.Context, name string, arguments string) (string, error) {
-	t, ok := m.Tool(name)
-	if !ok {
-		return "", fmt.Errorf("unknown tool %q", name)
-	}
-	return t.Run(ctx, arguments)
+// Tool is one declared command-line tool.
+type Tool struct {
+	Name                 string
+	Description          string
+	Parameters           map[string]any
+	Command              []string
+	Timeout              time.Duration
+	Workdir              string
+	MaxOutputBytes       int
+	RequiresConfirmation bool
+	// AllowFlagValues lets an argument value begin with "-". Off by default,
+	// so a model cannot turn a value into a command-line option.
+	AllowFlagValues bool
+
+	templates []*template.Template
 }
 
-// Run validates the arguments, builds the command line and runs it. Output is
-// stdout followed by stderr, capped at MaxOutputBytes. A non-zero exit or a
-// timeout is an error that still carries the output.
-func (t *Tool) Run(ctx context.Context, arguments string) (string, error) {
-	argv, err := t.Argv(arguments)
-	if err != nil {
-		return "", err
-	}
+type rawManifest struct {
+	Tools []rawTool `yaml:"tools"`
+}
 
-	runCtx, cancel := context.WithTimeout(ctx, t.Timeout)
-	defer cancel()
-
-	out := &cappedBuffer{limit: t.MaxOutputBytes}
-	cmd := exec.CommandContext(runCtx, argv[0], argv[1:]...)
-	cmd.Dir = t.Workdir
-	cmd.Stdout = out
-	cmd.Stderr = out
-	cmd.WaitDelay = 2 * time.Second
-
-	runErr := cmd.Run()
-	output := out.String()
-	switch {
-	case runErr == nil:
-		return output, nil
-	case errors.Is(runCtx.Err(), context.DeadlineExceeded):
-		return output, fmt.Errorf("timed out after %s\n%s", t.Timeout, output)
-	default:
-		return output, fmt.Errorf("%v\n%s", runErr, output)
-	}
+type rawTool struct {
+	Name            string         `yaml:"name"`
+	Description     string         `yaml:"description"`
+	Parameters      map[string]any `yaml:"parameters"`
+	Command         []string       `yaml:"command"`
+	Timeout         string         `yaml:"timeout"`
+	Workdir         string         `yaml:"workdir"`
+	MaxOutputBytes  int            `yaml:"max_output_bytes"`
+	Confirm         bool           `yaml:"confirm"`
+	AllowFlagValues bool           `yaml:"allow_flag_values"`
 }
 
 // Argv validates JSON arguments against the tool's parameters and expands the
@@ -121,6 +111,36 @@ func (t *Tool) validate(args map[string]any) error {
 	return nil
 }
 
+// properties returns the declared parameter schemas by name.
+func (t *Tool) properties() map[string]map[string]any {
+	out := map[string]map[string]any{}
+	props, _ := t.Parameters["properties"].(map[string]any)
+	for name, v := range props {
+		if spec, ok := v.(map[string]any); ok {
+			out[name] = spec
+		} else {
+			out[name] = map[string]any{}
+		}
+	}
+	return out
+}
+
+func (t *Tool) required() []string {
+	switch req := t.Parameters["required"].(type) {
+	case []string:
+		return req
+	case []any:
+		out := make([]string, 0, len(req))
+		for _, r := range req {
+			if s, ok := r.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	return nil
+}
+
 func checkType(name string, value any, spec map[string]any) error {
 	want, _ := spec["type"].(string)
 	ok := true
@@ -173,33 +193,4 @@ func stringify(v any) string {
 		}
 		return string(b)
 	}
-}
-
-// cappedBuffer keeps the first limit bytes written to it.
-type cappedBuffer struct {
-	limit     int
-	buf       bytes.Buffer
-	truncated bool
-}
-
-func (c *cappedBuffer) Write(p []byte) (int, error) {
-	room := c.limit - c.buf.Len()
-	if room <= 0 {
-		c.truncated = c.truncated || len(p) > 0
-		return len(p), nil
-	}
-	if len(p) > room {
-		c.buf.Write(p[:room])
-		c.truncated = true
-		return len(p), nil
-	}
-	c.buf.Write(p)
-	return len(p), nil
-}
-
-func (c *cappedBuffer) String() string {
-	if c.truncated {
-		return c.buf.String() + fmt.Sprintf("\n[output truncated at %d bytes]", c.limit)
-	}
-	return c.buf.String()
 }

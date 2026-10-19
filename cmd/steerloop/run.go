@@ -16,7 +16,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"github.com/mittalkanishk/steerloop"
-	"github.com/mittalkanishk/steerloop/internal/exectool"
+	"github.com/mittalkanishk/steerloop/internal/tools"
 	"github.com/mittalkanishk/steerloop/internal/provider"
 )
 
@@ -252,7 +252,7 @@ func buildToolset(opts runOptions, stop steerloop.StopCondition, humanAvailable 
 		}),
 	}
 
-	var manifest *exectool.Manifest
+	var manifest *exectool.ToolManifestExecutor
 	if opts.manifestPath != "" {
 		var err error
 		if manifest, err = exectool.Load(opts.manifestPath); err != nil {
@@ -264,7 +264,7 @@ func buildToolset(opts runOptions, stop steerloop.StopCondition, humanAvailable 
 		tools.executor = manifest
 		for _, t := range manifest.Tools {
 			tools.names = append(tools.names, t.Name)
-			if t.Confirm {
+			if t.RequiresConfirmation {
 				tools.pauses[t.Name] = confirmPause(opts.autoApprove, humanAvailable)
 			}
 		}

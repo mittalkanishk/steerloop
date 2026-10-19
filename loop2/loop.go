@@ -61,8 +61,11 @@ func (l *Loop) Start(ctx context.Context, messages []*schema.Message) <-chan eve
 	if !l.state.Begin(messages) {
 		return failedStart("loop already started")
 	}
+
 	l.transcript.Seed(ctx, messages)
+	
 	go l.engine.Run(ctx)
+	
 	return l.emitter.Events()
 }
 

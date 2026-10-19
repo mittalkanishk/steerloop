@@ -16,7 +16,10 @@ type Confirm struct {
 }
 
 func NewConfirm(autoApprove, humanAvailable bool) Confirm {
-	return Confirm{autoApprove: autoApprove, humanAvailable: humanAvailable}
+	return Confirm{
+		autoApprove:    autoApprove,
+		humanAvailable: humanAvailable,
+	}
 }
 
 func (g Confirm) Handle(ctx context.Context, call pause.Call, s pause.Session) (string, bool) {

@@ -5,8 +5,8 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
-	"github.com/mittalkanishk/steerloop/internal/exectool"
 	"github.com/mittalkanishk/steerloop/internal/gates"
+	executor "github.com/mittalkanishk/steerloop/internal/tools"
 	"github.com/mittalkanishk/steerloop/loop2"
 	"github.com/mittalkanishk/steerloop/loop2/pause"
 )
@@ -21,25 +21,29 @@ type Toolset struct {
 }
 
 func NewToolset(opts Options, humanAvailable bool) (Toolset, error) {
+
 	ts := Toolset{
-		Executor: exectool.Unknown{},
+		Executor: executor.Unknown{},
 		Gates:    map[string]pause.Handler{},
 	}
 
-	if opts.ManifestPath != "" {
-		manifest, err := exectool.Load(opts.ManifestPath)
+	if opts.ToolsManifestPath != "" {
+
+		manifestExecutor, err := executor.Load(opts.ToolsManifestPath)
 		if err != nil {
 			return Toolset{}, fmt.Errorf("invalid manifest:\n%w", err)
 		}
-		if ts.Infos, err = manifest.ToolInfos(); err != nil {
+		if ts.Infos, err = manifestExecutor.ToolInfos(); err != nil {
 			return Toolset{}, err
 		}
+
 		// *exectool.Manifest has an ExecuteTool method, so it is a
 		// loop2.ToolExecutor without saying so.
-		ts.Executor = manifest
-		for _, t := range manifest.Tools {
-			if t.Confirm {
-				ts.Gates[t.Name] = gates.NewConfirm(opts.AutoApprove, humanAvailable)
+		ts.Executor = manifestExecutor
+
+		for _, tool := range manifestExecutor.Tools {
+			if tool.RequiresConfirmation {
+				ts.Gates[tool.Name] = gates.NewConfirm(opts.AutoApprove, humanAvailable)
 			}
 		}
 	}
@@ -51,6 +55,25 @@ func NewToolset(opts Options, humanAvailable bool) (Toolset, error) {
 		}
 		ts.Infos = append(ts.Infos, info)
 		ts.Gates[gates.AskUserToolName] = gates.NewAskUser(humanAvailable)
+	}
+
+	stopToolParams := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"result": map[string]any{"type": "string", "description": "The final result"},
+		},
+		"required": []string{"result"},
+	}
+
+	// finish is not a gate, in toolset its a toolinfo appended when the stop mode is finish-tool;
+	// the loop recognizes it by name, so it needs no executor or gate entry.
+	if opts.StopCondition == "finish-tool" {
+		info, err := loop2.NewToolInfo(loop2.FinishToolName, "Call this once the task is complete with the final result", stopToolParams)
+		if err != nil {
+			return Toolset{}, err
+		}
+
+		ts.Infos = append(ts.Infos, info)
 	}
 
 	return ts, nil

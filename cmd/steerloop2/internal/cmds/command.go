@@ -21,9 +21,9 @@ func New(env cli.Environment) *Command {
 	}
 }
 
-// Run reads top to bottom: parse, validate, wire, execute.
+// Run reads top to bottom: parse, validate, build, execute.
 func (c *Command) Run(ctx context.Context, args []string) int {
-	
+
 	opts, err := ParseOptions(args, c.env.Stderr())
 	if errors.Is(err, flag.ErrHelp) {
 		return cli.ExitOK
@@ -37,7 +37,7 @@ func (c *Command) Run(ctx context.Context, args []string) int {
 		return cli.ExitUsage
 	}
 
-	run, err := Wire(ctx, c.env, opts)
+	run, err := NewRun(ctx, c.env, opts)
 	if err != nil {
 		fmt.Fprintf(c.env.Stderr(), "steerloop2: %v\n", err)
 		return cli.ExitUsage

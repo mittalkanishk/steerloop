@@ -13,14 +13,16 @@ import (
 	"os"
 
 	"github.com/mittalkanishk/steerloop/cmd/steerloop2/internal/cli"
+	cmds "github.com/mittalkanishk/steerloop/cmd/steerloop2/internal/cmds"
 	"github.com/mittalkanishk/steerloop/cmd/steerloop2/internal/osenv"
-	"github.com/mittalkanishk/steerloop/cmd/steerloop2/internal/runcmd"
 )
 
 func main() {
 	env := osenv.Real{}
+
 	app := cli.NewApp(env, map[string]cli.Command{
-		"run": runcmd.New(env),
+		"run": cmds.New(env),
 	})
+
 	os.Exit(app.Run(context.Background(), os.Args[1:]))
 }
