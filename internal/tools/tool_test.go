@@ -281,8 +281,3 @@ func TestRun_CancelledContext(t *testing.T) {
 	require.Error(t, err)
 	assert.Less(t, time.Since(start), 4*time.Second)
 }
-
-func quote(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
-}

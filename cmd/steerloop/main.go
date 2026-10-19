@@ -10,7 +10,7 @@ import (
 	"runtime/debug"
 	"syscall"
 
-	"github.com/mittalkanishk/steerloop/internal/tools"
+	exectool "github.com/mittalkanishk/steerloop/internal/tools"
 )
 
 // Exit codes.

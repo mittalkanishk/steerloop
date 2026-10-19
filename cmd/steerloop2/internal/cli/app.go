@@ -39,7 +39,7 @@ type App struct {
 
 func NewApp(env Environment, commands map[string]Command) *App {
 	return &App{
-		env: env,
+		env:      env,
 		commands: commands,
 	}
 }

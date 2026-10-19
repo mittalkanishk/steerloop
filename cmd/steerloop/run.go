@@ -16,8 +16,8 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"github.com/mittalkanishk/steerloop"
-	"github.com/mittalkanishk/steerloop/internal/tools"
 	"github.com/mittalkanishk/steerloop/internal/provider"
+	exectool "github.com/mittalkanishk/steerloop/internal/tools"
 )
 
 const askUserToolName = "ask_user"

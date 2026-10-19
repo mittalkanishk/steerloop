@@ -63,9 +63,9 @@ func (l *Loop) Start(ctx context.Context, messages []*schema.Message) <-chan eve
 	}
 
 	l.transcript.Seed(ctx, messages)
-	
+
 	go l.engine.Run(ctx)
-	
+
 	return l.emitter.Events()
 }
 
