@@ -5,6 +5,7 @@ import (
 	"flag"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/mittalkanishk/steerloop/loop2"
 )
@@ -25,6 +26,12 @@ type Options struct {
 	AskUser           bool
 	AutoApprove       bool
 	StopCondition     string
+	SystemPromptPath  string
+	Temperature       float64 // below 0: not sent, so the provider's default applies
+	MaxTokens         int
+	StepTimeout       time.Duration
+	TotalTimeout      time.Duration
+	Verbose           bool
 }
 
 // ParseOptions reads flags into Options. The flag package reports its own
@@ -41,6 +48,12 @@ func ParseOptions(args []string, stderr io.Writer) (Options, error) {
 	flags.BoolVar(&opts.AskUser, "ask", false, "give the model an ask_user tool")
 	flags.BoolVar(&opts.AutoApprove, "yes", false, "approve tools marked confirm without asking")
 	flags.StringVar(&opts.StopCondition, "stop-condition", "no-tool-calls", "when the loop ends: no-tool-calls, finish-tool or explicit")
+	flags.StringVar(&opts.SystemPromptPath, "system", "", "path to a system prompt file")
+	flags.Float64Var(&opts.Temperature, "temperature", -1, "sampling temperature; below 0 leaves it to the provider")
+	flags.IntVar(&opts.MaxTokens, "max-tokens", 4096, "cap on reply length, for providers that need one")
+	flags.DurationVar(&opts.StepTimeout, "step-timeout", time.Minute, "time allowed for one model call")
+	flags.DurationVar(&opts.TotalTimeout, "total-timeout", 10*time.Minute, "time allowed for the whole run")
+	flags.BoolVar(&opts.Verbose, "verbose", false, "write the loop's debug log to stderr")
 	err := flags.Parse(args)
 	return opts, err
 }
@@ -56,6 +69,10 @@ func (o Options) Validate() error {
 		return errors.New("--output must be text or jsonl")
 	case o.MaxIterations < 1:
 		return errors.New("--max-iterations must be at least 1")
+	case o.MaxTokens < 1:
+		return errors.New("--max-tokens must be at least 1")
+	case o.StepTimeout < 0 || o.TotalTimeout < 0:
+		return errors.New("--step-timeout and --total-timeout must not be negative")
 	}
 
 	if _, ok := stopConditions[o.StopCondition]; !ok {
