@@ -28,11 +28,16 @@ type FullHistory struct{}
 
 func (FullHistory) Compact(msgs []*schema.Message) []*schema.Message { return msgs }
 
-// TemperatureOnly passes just the temperature. Implements
+// TemperatureOnly passes just the temperature. A negative temperature means
+// "not set": nothing is sent, so the provider's default applies (models like
+// gpt-5 reject any temperature but their own). Implements
 // modelcall.OptionsBuilder.
 type TemperatureOnly struct{}
 
 func (TemperatureOnly) Build(temperature float32) []model.Option {
+	if temperature < 0 {
+		return nil
+	}
 	return []model.Option{model.WithTemperature(temperature)}
 }
 

@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 
 	"github.com/mittalkanishk/steerloop/cmd/steerloop2/internal/cli"
@@ -63,13 +62,12 @@ func NewRun(ctx context.Context, env cli.Environment, opts Options) (*Run, error
 	cfg.Pauses = tools.Gates
 	cfg.StopCondition = stopConditions[opts.StopCondition] // basically a map of 3 accepted values.
 	cfg.Temperature = opts.Temperature
-	cfg.CallOptions = OptionalTemperature{}
 	cfg.StepTimeout = opts.StepTimeout
 	cfg.TotalTimeout = opts.TotalTimeout
 
-	// Logger: the loop's debug log on stderr with --verbose; nil discards it.
+	// Logger: the loop's debug log on stderr with --debug; nil discards it.
 	var logger *slog.Logger
-	if opts.Verbose {
+	if opts.Debug {
 		logger = slog.New(slog.NewTextHandler(env.Stderr(), &slog.HandlerOptions{Level: slog.LevelDebug}))
 	}
 
@@ -106,22 +104,8 @@ func NewRun(ctx context.Context, env cli.Environment, opts Options) (*Run, error
 	}, nil
 }
 
-// OptionalTemperature sends the temperature only when one was asked for. A
-// negative value means "not set", so the provider's default applies; models
-// like gpt-5 reject any temperature but their own. It reads the live setting
-// on every call, so a later change to 0 or more is sent from then on.
-// Implements loop2.CallOptionsBuilder.
-type OptionalTemperature struct{}
-
-func (OptionalTemperature) Build(temperature float32) []model.Option {
-	if temperature < 0 {
-		return nil
-	}
-	return []model.Option{model.WithTemperature(temperature)}
-}
-
-// initialMessages is the conversation the run starts from: the --system
-// file, if any, then the prompt.
+// initialMessages is the conversation the run starts from: the --system-prompt
+// file, if any, then the user prompt.
 func initialMessages(opts Options) ([]*schema.Message, error) {
 	var messages []*schema.Message
 	if opts.SystemPromptPath != "" {
@@ -129,9 +113,23 @@ func initialMessages(opts Options) ([]*schema.Message, error) {
 		if err != nil {
 			return nil, fmt.Errorf("read system prompt: %w", err)
 		}
-		messages = append(messages, &schema.Message{Role: schema.System, Content: string(system)})
+		if strings.TrimSpace(string(system)) == "" {
+			return nil, fmt.Errorf("system prompt file %s is empty", opts.SystemPromptPath)
+		}
+		messages = append(messages, &schema.Message{
+			Role:    schema.System,
+			Content: string(system),
+		})
 	}
-	return append(messages, &schema.Message{Role: schema.User, Content: strings.TrimSpace(opts.Prompt)}), nil
+
+	// User Prompt is always added.
+	// So you get [system, user] with --system-prompt and [user] without it.
+	messages = append(messages, &schema.Message{
+		Role:    schema.User,
+		Content: strings.TrimSpace(opts.UserPrompt),
+	})
+
+	return messages, nil
 }
 
 // Execute runs one turn. Exactly three goroutines take part, all started here:
