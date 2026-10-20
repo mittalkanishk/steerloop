@@ -25,7 +25,17 @@ const (
 	// StopOnFinishTool runs until the model calls FinishToolName.
 	StopOnFinishTool
 	// StopOnExplicit runs until a stop signal, the iteration cap or a timeout.
-	StopOnExplicit
+	StopOnExternal
+)
+
+type ReflectCondition int
+
+const (
+	ReflectOff ReflectCondition = iota // default: no reflection
+	// ReflectOnSteps reflects after each step.
+	ReflectOnSteps
+	// ReflectOnFinish reflects after the final reply.
+	ReflectOnFinish
 )
 
 // The interfaces below are what a caller may plug into Config. Every one is
@@ -83,6 +93,8 @@ type Config struct {
 	DoneDeliveryGrace time.Duration // wait for a reader of the done event; zero: 5s
 
 	Pauses map[string]pause.Handler // tool name → handler, in place of the ToolExecutor
+
+	StopInstructions string // instructions for the stop condition
 
 	AutoNudgeText    string // sent after a text-only reply in StopOnFinishTool; empty: built-in
 	DisableAutoNudge bool

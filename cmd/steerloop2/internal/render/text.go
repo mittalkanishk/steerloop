@@ -60,6 +60,9 @@ func (t *Text) Write(evt event.Event) {
 	case event.ThinkingData:
 		fmt.Fprintf(t.trace, "\n%s\n", t.s.step.Render(fmt.Sprintf("── step %d ", evt.Iteration)))
 
+	case event.ProgressData:
+		fmt.Fprintf(t.trace, "  %s\n", t.s.dim.Render(d.Message))
+
 	case event.ToolCallData:
 		fmt.Fprintf(t.trace, "  %s %s\n", t.s.tool.Render("▸ "+d.Name), t.s.dim.Render(oneLine(d.Arguments)))
 

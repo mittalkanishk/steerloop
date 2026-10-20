@@ -71,11 +71,12 @@ func (e *Emitter) Dropped() int {
 
 // Emit offers an intermediate event. When the channel is full the event is
 // dropped and counted.
-func (e *Emitter) Emit(t event.Type, data any) {
+func (e *Emitter) Emit(data event.Data) {
+	t := data.Type()
 	if !e.opts.StreamEvents && t != event.Done && t != event.Error {
 		return
 	}
-	evt := event.Event{Type: t, Data: data, Iteration: e.iterations.Iteration(), Timestamp: time.Now().UTC()}
+	evt := event.New(data, e.iterations.Iteration())
 
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -99,7 +100,7 @@ func (e *Emitter) Emit(t event.Type, data any) {
 func (e *Emitter) Done(d event.DoneData) {
 	e.doneOnce.Do(func() {
 		e.results.SetResult(d)
-		evt := event.Event{Type: event.Done, Data: d, Iteration: d.Iterations, Timestamp: time.Now().UTC()}
+		evt := event.New(d, d.Iterations)
 
 		e.mu.RLock()
 		defer e.mu.RUnlock()

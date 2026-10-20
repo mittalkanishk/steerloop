@@ -28,7 +28,7 @@ func (e *Engine) callModel(ctx context.Context) (turn, bool) {
 	max := e.d.State.MaxIterations()
 
 	e.d.Logger.Debug("agent loop iteration", slog.Int("iteration", t.index), slog.Int("max", max))
-	e.d.Emitter.Emit(event.Thinking, event.ThinkingData{Message: thinkingMessage(t.index, max)})
+	e.d.Emitter.Emit(event.ThinkingData{Message: thinkingMessage(t.index, max)})
 
 	t.request = e.d.Compactor.Compact(e.d.State.Messages())
 	t.usageBefore = e.d.State.Usage()
@@ -53,7 +53,7 @@ func (e *Engine) callModel(ctx context.Context) (turn, bool) {
 // recordTurn emits the LLMTurn audit event for a turn that led to tool calls.
 func (e *Engine) recordTurn(t turn) {
 	usage := e.d.State.Usage()
-	e.d.Emitter.Emit(event.LLMTurn, e.d.Audit.Record(audit.Turn{
+	e.d.Emitter.Emit(e.d.Audit.Record(audit.Turn{
 		Index:         t.index,
 		InputTokens:   usage.Input - t.usageBefore.Input,
 		OutputTokens:  usage.Output - t.usageBefore.Output,

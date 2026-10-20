@@ -16,7 +16,7 @@ import (
 	"github.com/mittalkanishk/steerloop/loop2/internal/engine"
 	"github.com/mittalkanishk/steerloop/loop2/internal/modelcall"
 	"github.com/mittalkanishk/steerloop/loop2/internal/state"
-	"github.com/mittalkanishk/steerloop/loop2/internal/stopping"
+	stoppingPolicy "github.com/mittalkanishk/steerloop/loop2/internal/stopping_policy"
 	"github.com/mittalkanishk/steerloop/loop2/internal/transcript"
 	"github.com/mittalkanishk/steerloop/loop2/pause"
 )
@@ -145,9 +145,17 @@ func New(cfg Config, llm model.ToolCallingChatModel, tools []*schema.ToolInfo, e
 		Logger:           logger,
 		TotalTimeout:     cfg.TotalTimeout,
 		ReflectionPrompt: reflectionPrompt,
+		StopInstructions: stopInstructions(cfg, stop),
 	})
 
-	return &Loop{engine: eng, finish: finish, state: st, emitter: em, inbox: inbox, transcript: log}, nil
+	return &Loop{
+		engine:     eng,
+		finish:     finish,
+		state:      st,
+		emitter:    em,
+		inbox:      inbox,
+		transcript: log,
+	}, nil
 }
 
 func stopPolicy(cfg Config) engine.StopPolicy {
@@ -160,11 +168,11 @@ func stopPolicy(cfg Config) engine.StopPolicy {
 				nudge = defaultAutoNudge
 			}
 		}
-		return stopping.NewFinishTool(FinishToolName, nudge)
-	case StopOnExplicit:
-		return stopping.Explicit{}
+		return stoppingPolicy.NewFinishTool(FinishToolName, nudge)
+	case StopOnExternal:
+		return stoppingPolicy.ExternalFinish{}
 	default:
-		return stopping.NoToolCalls{}
+		return stoppingPolicy.NoToolCalls{}
 	}
 }
 
@@ -178,4 +186,11 @@ func retryAttempts(configured int) int {
 	default:
 		return configured
 	}
+}
+
+func stopInstructions(cfg Config, stop engine.StopPolicy) string {
+	if cfg.StopInstructions != "" {
+		return cfg.StopInstructions
+	}
+	return stop.Instructions()
 }

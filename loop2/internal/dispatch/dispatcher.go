@@ -22,7 +22,7 @@ type Executor interface {
 
 // Emitter sends events. → emitter.Emitter
 type Emitter interface {
-	Emit(t event.Type, data any)
+	Emit(data event.Data)
 }
 
 // History is the conversation. → state.Run
@@ -72,7 +72,7 @@ func New(d Deps) *Dispatcher {
 // Dispatch runs one tool call and records its result in the history. It
 // returns false when a pause handler ended the run.
 func (x *Dispatcher) Dispatch(ctx context.Context, tc schema.ToolCall) bool {
-	x.d.Emitter.Emit(event.ToolCall, event.ToolCallData{ToolCallID: tc.ID, Name: tc.Function.Name, Arguments: tc.Function.Arguments})
+	x.d.Emitter.Emit(event.ToolCallData{ToolCallID: tc.ID, Name: tc.Function.Name, Arguments: tc.Function.Arguments})
 
 	if h, ok := x.d.Handlers[tc.Function.Name]; ok {
 		return x.runHandler(ctx, h, tc)
@@ -119,7 +119,7 @@ func (x *Dispatcher) runHandler(ctx context.Context, h pause.Handler, tc schema.
 }
 
 func (x *Dispatcher) recordResult(tc schema.ToolCall, result, errText string, took time.Duration) {
-	x.d.Emitter.Emit(event.ToolResult, event.ToolResultData{
+	x.d.Emitter.Emit(event.ToolResultData{
 		ToolCallID: tc.ID,
 		Name:       tc.Function.Name,
 		Result:     result,
@@ -135,7 +135,7 @@ func (x *Dispatcher) execute(ctx context.Context, name, args string) (result str
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("tool panicked: %v", r)
-			x.d.Emitter.Emit(event.Error, event.ErrorData{Error: fmt.Sprintf("tool %q panicked: %v", name, r)})
+			x.d.Emitter.Emit(event.ErrorData{Error: fmt.Sprintf("tool %q panicked: %v", name, r)})
 		}
 	}()
 	return x.d.Executor.ExecuteTool(ctx, name, args)
@@ -145,7 +145,7 @@ func (x *Dispatcher) execute(ctx context.Context, name, args string) (result str
 func (x *Dispatcher) handle(ctx context.Context, h pause.Handler, call pause.Call, s *session) (reply string, keepGoing bool) {
 	defer func() {
 		if r := recover(); r != nil {
-			x.d.Emitter.Emit(event.Error, event.ErrorData{Error: fmt.Sprintf("pause %q panicked: %v", call.Name, r)})
+			x.d.Emitter.Emit(event.ErrorData{Error: fmt.Sprintf("pause %q panicked: %v", call.Name, r)})
 			reply = fmt.Sprintf("Error executing tool %q: pause function panicked: %v", call.Name, r)
 			keepGoing = true
 		}

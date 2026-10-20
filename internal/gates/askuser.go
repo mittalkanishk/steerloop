@@ -52,7 +52,7 @@ func (g AskUser) Handle(ctx context.Context, call pause.Call, s pause.Session) (
 		return AskUserToolName + ` needs a non-empty "question".`, true
 	}
 
-	s.Emit(event.AwaitingInput, event.AwaitingInputData{Question: args.Question, Options: args.Options})
+	s.Emit(event.AwaitingInputData{Question: args.Question, Options: args.Options})
 	if !g.humanAvailable {
 		return "", false // ends the run as awaiting a human
 	}

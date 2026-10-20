@@ -33,7 +33,7 @@ type Session interface {
 	// this call.
 	CallModel(ctx context.Context, tools []*schema.ToolInfo, msgs []*schema.Message) (*schema.Message, error)
 	// Emit sends an event on the loop's event channel.
-	Emit(t event.Type, data any)
+	Emit(data event.Data)
 	// AwaitReply waits for the next injected message and returns it. ok is
 	// false when the loop was stopped or ctx ended while waiting.
 	AwaitReply(ctx context.Context) (reply string, ok bool)
