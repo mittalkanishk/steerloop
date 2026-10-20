@@ -70,7 +70,7 @@ type ErrorClassifier interface {
 type Config struct {
 	MaxIterations int           // cap on model calls; the loop never exceeds it
 	StopCondition StopCondition // when the loop ends on its own
-	Temperature   float64
+	Temperature   float64       // below 0: not sent, so the provider's default applies
 	StepTimeout   time.Duration // bound on one model call; zero: none
 	TotalTimeout  time.Duration // bound on the whole run; zero: none
 

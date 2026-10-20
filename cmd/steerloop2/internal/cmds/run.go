@@ -2,6 +2,9 @@ package runcmd
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
+	"os"
 	"strings"
 
 	"github.com/cloudwego/eino/schema"
@@ -42,7 +45,7 @@ type Run struct {
 // which implementation runs.
 func NewRun(ctx context.Context, env cli.Environment, opts Options) (*Run, error) {
 
-	llm, err := provider.Build(ctx, opts.Model, provider.Options{Getenv: env.Getenv, MaxTokens: 4096})
+	llm, err := provider.Build(ctx, opts.Model, provider.Options{Getenv: env.Getenv, MaxTokens: opts.MaxTokens})
 	if err != nil {
 		return nil, err
 	}
@@ -58,8 +61,22 @@ func NewRun(ctx context.Context, env cli.Environment, opts Options) (*Run, error
 	cfg.MaxIterations = opts.MaxIterations
 	cfg.Pauses = tools.Gates
 	cfg.StopCondition = stopConditions[opts.StopCondition] // basically a map of 3 accepted values.
+	cfg.Temperature = opts.Temperature
+	cfg.StepTimeout = opts.StepTimeout
+	cfg.TotalTimeout = opts.TotalTimeout
 
-	loop, err := loop2.New(cfg, llm.Chat, tools.Infos, tools.Executor, nil)
+	// Logger: the loop's debug log on stderr with --debug; nil discards it.
+	var logger *slog.Logger
+	if opts.Debug {
+		logger = slog.New(slog.NewTextHandler(env.Stderr(), &slog.HandlerOptions{Level: slog.LevelDebug}))
+	}
+
+	loop, err := loop2.New(cfg, llm.Chat, tools.Infos, tools.Executor, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	messages, err := initialMessages(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -80,11 +97,39 @@ func NewRun(ctx context.Context, env cli.Environment, opts Options) (*Run, error
 
 	return &Run{
 		loop:       loop,
-		messages:   []*schema.Message{{Role: schema.User, Content: strings.TrimSpace(opts.Prompt)}},
+		messages:   messages,
 		sink:       sink,
 		steering:   steer,
 		interrupts: interrupt.NewWatcher(env.Stderr()),
 	}, nil
+}
+
+// initialMessages is the conversation the run starts from: the --system-prompt
+// file, if any, then the user prompt.
+func initialMessages(opts Options) ([]*schema.Message, error) {
+	var messages []*schema.Message
+	if opts.SystemPromptPath != "" {
+		system, err := os.ReadFile(opts.SystemPromptPath)
+		if err != nil {
+			return nil, fmt.Errorf("read system prompt: %w", err)
+		}
+		if strings.TrimSpace(string(system)) == "" {
+			return nil, fmt.Errorf("system prompt file %s is empty", opts.SystemPromptPath)
+		}
+		messages = append(messages, &schema.Message{
+			Role:    schema.System,
+			Content: string(system),
+		})
+	}
+
+	// User Prompt is always added.
+	// So you get [system, user] with --system-prompt and [user] without it.
+	messages = append(messages, &schema.Message{
+		Role:    schema.User,
+		Content: strings.TrimSpace(opts.UserPrompt),
+	})
+
+	return messages, nil
 }
 
 // Execute runs one turn. Exactly three goroutines take part, all started here:

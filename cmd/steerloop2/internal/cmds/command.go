@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"strings"
 
 	"github.com/mittalkanishk/steerloop/cmd/steerloop2/internal/cli"
 )
@@ -33,7 +34,10 @@ func (c *Command) Run(ctx context.Context, args []string) int {
 	}
 
 	if err := opts.Validate(); err != nil {
-		fmt.Fprintf(c.env.Stderr(), "steerloop2: %v\n", err)
+		// Validate joins every problem, one per line.
+		for _, line := range strings.Split(err.Error(), "\n") {
+			fmt.Fprintf(c.env.Stderr(), "steerloop2: %s\n", line)
+		}
 		return cli.ExitUsage
 	}
 
