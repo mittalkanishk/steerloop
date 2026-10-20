@@ -36,16 +36,14 @@ func (s *session) CallModel(ctx context.Context, tools []*schema.ToolInfo, msgs 
 	return s.x.d.Caller.Call(ctx, m, msgs)
 }
 
-func (s *session) Emit(t event.Type, data any) {
-	if t == event.AwaitingInput {
-		switch d := data.(type) {
-		case event.AwaitingInputData:
-			s.awaiting = &d
-		case *event.AwaitingInputData:
-			s.awaiting = d
-		}
+func (s *session) Emit(data event.Data) {
+	switch d := data.(type) {
+	case event.AwaitingInputData:
+		s.awaiting = &d
+	case *event.AwaitingInputData:
+		s.awaiting = d
 	}
-	s.x.d.Emitter.Emit(t, data)
+	s.x.d.Emitter.Emit(data)
 }
 
 // AwaitReply waits for the next injected message. If the loop is stopped

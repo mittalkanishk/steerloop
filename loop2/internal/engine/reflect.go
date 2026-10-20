@@ -18,13 +18,13 @@ func (e *Engine) reflect(ctx context.Context, content string) {
 
 	reflection, err := e.d.Caller.Call(ctx, e.d.Model, e.d.State.Messages())
 	if err != nil {
-		e.d.Emitter.Emit(event.Error, event.ErrorData{Error: "reflection failed: " + err.Error()})
+		e.d.Emitter.Emit(event.ErrorData{Error: "reflection failed: " + err.Error()})
 		return
 	}
 	if reflection == nil {
 		return
 	}
 	e.d.State.AddUsage(reflection)
-	e.d.Emitter.Emit(event.Reflection, event.ReflectionData{Content: reflection.Content})
+	e.d.Emitter.Emit(event.ReflectionData{Content: reflection.Content})
 	e.d.State.Append(reflection)
 }

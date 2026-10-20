@@ -13,9 +13,15 @@ import (
 )
 
 var stopConditions = map[string]loop2.StopCondition{
-	"no-tool-calls": loop2.StopOnNoToolCalls,
-	"finish-tool":   loop2.StopOnFinishTool,
-	"explicit":      loop2.StopOnExplicit,
+	"no-tool-calls":   loop2.StopOnNoToolCalls,
+	"finish-tool":     loop2.StopOnFinishTool,
+	"external-finish": loop2.StopOnExternal,
+}
+
+var reflectConditions = map[string]loop2.ReflectCondition{
+	"off":       loop2.ReflectOff,
+	"on-steps":  loop2.ReflectOnSteps,
+	"on-finish": loop2.ReflectOnFinish,
 }
 
 // Options is the `steerloop2 run` command line.
@@ -32,6 +38,7 @@ type Options struct {
 	StepTimeout   time.Duration
 	TotalTimeout  time.Duration
 	StopCondition string
+	Reflect       string // "on-steps" or "on-finish"
 	// Tool Options
 	ToolsManifestPath string
 	AutoApprove       bool
@@ -65,6 +72,7 @@ func ParseOptions(args []string, stderr io.Writer) (Options, error) {
 	flags.DurationVar(&opts.StepTimeout, "step-timeout", time.Minute, "time allowed for one model call")
 	flags.DurationVar(&opts.TotalTimeout, "total-timeout", 10*time.Minute, "time allowed for the whole run")
 	flags.StringVar(&opts.StopCondition, "stop-condition", "no-tool-calls", "when the loop ends: no-tool-calls, finish-tool or explicit")
+	flags.StringVar(&opts.Reflect, "reflect", "off", "when to reflect: off, on-steps or on-finish")
 	// Tool Flags
 	flags.StringVar(&opts.ToolsManifestPath, "tools", "", "path to a tool manifest (YAML)")
 	flags.BoolVar(&opts.AskUser, "ask-user", false, "give the model an ask_user tool")
@@ -128,6 +136,9 @@ func (o Options) Validate() error {
 	}
 	if _, ok := stopConditions[o.StopCondition]; !ok {
 		fail("--stop-condition must be no-tool-calls, finish-tool or explicit, not %q", o.StopCondition)
+	}
+	if _, ok := reflectConditions[o.Reflect]; !ok {
+		fail("--reflect must be on-steps or on-finish, not %q", o.Reflect)
 	}
 
 	// Tools

@@ -110,3 +110,16 @@ type DoneData struct {
 	DroppedEvents int             `json:"dropped_events,omitempty"`
 	LLMUsage      LLMUsageSummary `json:"llm_usage"`
 }
+
+// Each payload's Type is the label it is sent under.
+
+func (ThinkingData) Type() Type      { return Thinking }
+func (ToolCallData) Type() Type      { return ToolCall }
+func (ToolResultData) Type() Type    { return ToolResult }
+func (ResponseData) Type() Type      { return Response }
+func (ReflectionData) Type() Type    { return Reflection }
+func (ProgressData) Type() Type      { return Progress }
+func (ErrorData) Type() Type         { return Error }
+func (DoneData) Type() Type          { return Done }
+func (LLMTurnData) Type() Type       { return LLMTurn }
+func (AwaitingInputData) Type() Type { return AwaitingInput }

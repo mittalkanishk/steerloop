@@ -19,7 +19,12 @@ type Finisher struct {
 }
 
 func NewFinisher(st *state.Run, em *emitter.Emitter, logger *slog.Logger) *Finisher {
-	return &Finisher{state: st, emitter: em, logger: logger, closed: make(chan struct{})}
+	return &Finisher{
+		state:   st,
+		emitter: em,
+		logger:  logger,
+		closed:  make(chan struct{}),
+	}
 }
 
 // Done ends the run for reason.
@@ -30,7 +35,7 @@ func (f *Finisher) Done(reason event.DoneReason, finalContent string) {
 // Fail ends the run on a fatal error.
 func (f *Finisher) Fail(msg string) {
 	f.state.Fail(msg)
-	f.emitter.Emit(event.Error, event.ErrorData{Error: msg, Fatal: true})
+	f.emitter.Emit(event.ErrorData{Error: msg, Fatal: true})
 	f.Done(event.ReasonError, "")
 }
 

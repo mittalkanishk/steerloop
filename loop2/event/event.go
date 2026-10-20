@@ -32,10 +32,22 @@ const (
 	AwaitingInput Type = "awaiting_input"
 )
 
-// Event is one update from a running loop.
+// Data is an event payload. Each payload names its own Type, so a payload
+// can never be sent under another type's label.
+type Data interface {
+	Type() Type
+}
+
+// Event is one update from a running loop. Type always equals Data.Type();
+// it is kept for JSON readers, which cannot see the payload's Go type.
 type Event struct {
 	Type      Type      `json:"type"`
-	Data      any       `json:"data"`
+	Data      Data      `json:"data"`
 	Iteration int       `json:"iteration"`
 	Timestamp time.Time `json:"timestamp"`
+}
+
+// New builds the event for data, labelled with data's own Type.
+func New(data Data, iteration int) Event {
+	return Event{Type: data.Type(), Data: data, Iteration: iteration, Timestamp: time.Now().UTC()}
 }

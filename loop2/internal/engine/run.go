@@ -31,6 +31,8 @@ type ToolDispatcher interface {
 // StopPolicy is the run's stop condition, chosen once in wire.go. → internal/stopping
 type StopPolicy interface {
 	Label() string
+	// Instructions returns the instructions for the stop condition.
+	Instructions() string
 	// FinishCall returns the call that ends the run, when the reply has one.
 	FinishCall(reply *schema.Message) (schema.ToolCall, bool)
 	// AfterText says whether a text-only reply ends the run, and what
@@ -68,6 +70,7 @@ type Deps struct {
 
 	TotalTimeout     time.Duration
 	ReflectionPrompt string
+	StopInstructions string
 }
 
 type Engine struct {
@@ -138,7 +141,7 @@ func (e *Engine) limitReached(ctx context.Context) (event.DoneReason, bool) {
 // the run ended.
 func (e *Engine) handleToolCalls(ctx context.Context, t turn) bool {
 	if call, ok := e.d.Stop.FinishCall(t.reply); ok {
-		e.d.Emitter.Emit(event.ToolCall, event.ToolCallData{ToolCallID: call.ID, Name: call.Function.Name, Arguments: call.Function.Arguments})
+		e.d.Emitter.Emit(event.ToolCallData{ToolCallID: call.ID, Name: call.Function.Name, Arguments: call.Function.Arguments})
 		e.d.Finish.Done(event.ReasonFinished, call.Function.Arguments)
 		return false
 	}
@@ -161,7 +164,7 @@ func (e *Engine) handleToolCalls(ctx context.Context, t turn) bool {
 // run ended.
 func (e *Engine) handleText(ctx context.Context, t turn) bool {
 	content := t.reply.Content
-	e.d.Emitter.Emit(event.Response, event.ResponseData{Content: content})
+	e.d.Emitter.Emit(event.ResponseData{Content: content})
 	e.d.State.Append(t.reply)
 
 	ends, nudge := e.d.Stop.AfterText()
@@ -180,6 +183,28 @@ func (e *Engine) handleText(ctx context.Context, t turn) bool {
 	}
 	e.logTranscript(ctx, t.index)
 	return true
+}
+
+// Seed returns the conversation the run starts from: messages plus the stop
+// instructions, placed after the caller's own system messages. Providers
+// such as Anthropic accept system messages only before the first user
+// message. A conversation that already has them, such as a resumed run, is
+// returned unchanged.
+func (e *Engine) Seed(messages []*schema.Message) []*schema.Message {
+	text := e.d.StopInstructions
+	if text == "" {
+		return messages
+	}
+	i := 0
+	for ; i < len(messages) && messages[i].Role == schema.System; i++ {
+		if messages[i].Content == text {
+			return messages
+		}
+	}
+	out := make([]*schema.Message, 0, len(messages)+1)
+	out = append(out, messages[:i]...)
+	out = append(out, &schema.Message{Role: schema.System, Content: text})
+	return append(out, messages[i:]...)
 }
 
 func (e *Engine) logTranscript(ctx context.Context, iteration int) {
