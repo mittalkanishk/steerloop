@@ -18,6 +18,6 @@ file = ".mise/scripts/lint.sh"
 description = "Tag a release from main and push the tag (triggers the Release workflow). Set VERSION=vX.Y.Z to skip the prompt."
 file = ".mise/scripts/git-tag-release.sh"
 
-[tasks.steerloop2]
-description = "Run the local steerloop2 binary"
-run = "go run ./cmd/steerloop2"
+[tasks.steerloop]
+description = "Run the local steerloop binary"
+run = "go run ./cmd/steerloop"

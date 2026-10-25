@@ -16,7 +16,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"gopkg.in/yaml.v3"
 
-	"github.com/mittalkanishk/steerloop/loop2"
+	"github.com/mittalkanishk/steerloop/loop"
 )
 
 const (
@@ -32,7 +32,7 @@ type ToolManifestExecutor struct {
 }
 
 // ExecuteTool runs the named tool with JSON arguments. It satisfies
-// loop2.ToolExecutor.
+// loop.ToolExecutor.
 func (m *ToolManifestExecutor) ExecuteTool(ctx context.Context, name string, arguments string) (string, error) {
 	t, ok := m.Tool(name)
 	if !ok {
@@ -81,7 +81,7 @@ func (m *ToolManifestExecutor) Tool(name string) (*Tool, bool) {
 func (m *ToolManifestExecutor) ToolInfos() ([]*schema.ToolInfo, error) {
 	infos := make([]*schema.ToolInfo, 0, len(m.Tools))
 	for _, t := range m.Tools {
-		info, err := loop2.NewToolInfo(t.Name, t.Description, t.Parameters)
+		info, err := loop.NewToolInfo(t.Name, t.Description, t.Parameters)
 		if err != nil {
 			return nil, err
 		}
@@ -140,7 +140,7 @@ func Parse(data []byte) (*ToolManifestExecutor, error) {
 		switch {
 		case !toolNameRE.MatchString(rt.Name):
 			fail("name must be 1 to 64 letters, digits, underscores or hyphens")
-		case rt.Name == loop2.FinishToolName:
+		case rt.Name == loop.FinishToolName:
 			fail("name %q is reserved", rt.Name)
 		case seen[rt.Name]:
 			fail("name is declared twice")

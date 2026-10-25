@@ -12,8 +12,8 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
-	"github.com/mittalkanishk/steerloop/loop2"
-	"github.com/mittalkanishk/steerloop/loop2/event"
+	"github.com/mittalkanishk/steerloop/loop"
+	"github.com/mittalkanishk/steerloop/loop/event"
 	"github.com/mittalkanishk/steerloop/steerlooptest"
 )
 
@@ -32,7 +32,7 @@ func (upper) ExecuteTool(_ context.Context, _ string, arguments string) (string,
 
 func main() {
 
-	upperInfo, err := loop2.NewToolInfo("upper", "Upper-case a string.", map[string]any{
+	upperInfo, err := loop.NewToolInfo("upper", "Upper-case a string.", map[string]any{
 		"type":       "object",
 		"properties": map[string]any{"text": map[string]any{"type": "string"}},
 		"required":   []string{"text"},
@@ -46,7 +46,7 @@ func main() {
 		steerlooptest.Step{Content: "The tool returned HELLO."},
 	)
 
-	loop, err := loop2.New(loop2.DefaultConfig(), chatModel, []*schema.ToolInfo{upperInfo}, upper{}, nil)
+	loop, err := loop.New(loop.DefaultConfig(), chatModel, []*schema.ToolInfo{upperInfo}, upper{}, nil)
 	if err != nil {
 		log.Fatal(err)
 	}

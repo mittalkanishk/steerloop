@@ -7,7 +7,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/mittalkanishk/steerloop/loop2/event"
+	"github.com/mittalkanishk/steerloop/loop/event"
 )
 
 // JSONL writes each event as one JSON line. It is safe for concurrent use.

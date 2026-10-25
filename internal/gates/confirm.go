@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mittalkanishk/steerloop/loop2/event"
-	"github.com/mittalkanishk/steerloop/loop2/pause"
+	"github.com/mittalkanishk/steerloop/loop/event"
+	"github.com/mittalkanishk/steerloop/loop/pause"
 )
 
 // Confirm asks before running a tool marked confirm.

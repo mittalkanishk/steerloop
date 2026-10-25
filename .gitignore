@@ -17,5 +17,5 @@ venv/
 # Video production: scripts, slides, recordings and exports
 /youtube/
 
-# steerloop2 run recordings: they hold prompts and tool output
+# steerloop run recordings: they hold prompts and tool output
 /run-recordings/
