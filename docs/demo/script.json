@@ -1,0 +1,5 @@
+{"steps": [
+  {"delay_ms": 700, "tool_calls": [{"id": "call_1", "name": "grep_repo", "arguments": {"pattern": "^const FinishToolName"}}]},
+  {"delay_ms": 600, "tool_calls": [{"id": "call_2", "name": "count_lines", "arguments": {"path": "loop/config.go"}}]},
+  {"delay_ms": 500, "content": "It is defined once, in loop/config.go (line 41), as the string \"finish\"."}
+]}
