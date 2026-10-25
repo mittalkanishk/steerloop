@@ -1,4 +1,0 @@
-{"steps": [
-    {"delay_ms": 15000, "tool_calls": [{"id": "c1", "name": "count_lines", "arguments": {"path": "go.mod"}}]},
-    {"content": "Done. go.mod has a few lines."}
-  ]}

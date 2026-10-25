@@ -1,7 +1,0 @@
-{
-  "steps": 
-  [
-    {"tool_calls": [{"id": "call_1", "name": "danger", "arguments": {"target": "build/"}}]},
-    {"content": "Finished."}
-  ]
-}

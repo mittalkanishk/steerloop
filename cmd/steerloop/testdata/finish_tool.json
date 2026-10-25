@@ -1,5 +1,0 @@
-{"steps": [
-  {"content": "Let me think about that first."},
-  {"tool_calls": [{"id": "call_1", "name": "say", "arguments": {"message": "working"}}]},
-  {"tool_calls": [{"id": "call_2", "name": "finish", "arguments": {"result": "all done"}}]}
-]}

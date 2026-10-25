@@ -1,4 +1,0 @@
-{"steps": [
-  {"tool_calls": [{"id": "call_1", "name": "nap", "arguments": {"seconds": "5"}}]},
-  {"content": "Rested."}
-]}

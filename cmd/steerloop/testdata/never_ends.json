@@ -1,1 +1,0 @@
-{"steps": [{"tool_calls": [{"id": "call_1", "name": "say", "arguments": {"message": "again"}}]}]}

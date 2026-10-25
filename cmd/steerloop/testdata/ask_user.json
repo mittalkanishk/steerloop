@@ -1,4 +1,0 @@
-{"steps": [
-  {"tool_calls": [{"id": "call_1", "name": "ask_user", "arguments": {"question": "Which colour?", "options": ["red", "blue"]}}]},
-  {"content": "You chose blue."}
-]}
