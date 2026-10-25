@@ -1,0 +1,5 @@
+{"steps": [
+  {"delay_ms": 400, "tool_calls": [{"id": "call_1", "name": "say", "arguments": {"message": "one"}}]},
+  {"tool_calls": [{"id": "call_2", "name": "say", "arguments": {"message": "two"}}]},
+  {"content": "Both done."}
+]}

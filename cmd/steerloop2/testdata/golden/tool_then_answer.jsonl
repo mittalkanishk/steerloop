@@ -1,0 +1,7 @@
+{"type":"thinking","data":{"message":"Reasoning (iteration 1/12)…"},"iteration":1,"timestamp":"T"}
+{"type":"llm_turn","data":{"turn_index":1,"input_tokens":120,"output_tokens":18,"cost_amount":0,"request_messages_json":"eyJtZXNzYWdlcyI6W3sicm9sZSI6InN5c3RlbSIsImNvbnRlbnQiOiJBIHJlcGx5IHdpdGhvdXQgYSB0b29sIGNhbGwgZW5kcyB0aGUgcnVuIGFuZCBpcyB0YWtlbiBhcyB5b3VyIGZpbmFsIGFuc3dlci4gVW50aWwgeW91IGFyZSBkb25lLCBrZWVwIGNhbGxpbmcgdG9vbHM7IGRvIG5vdCByZXBseSB3aXRoIHBsYWluIHRleHQgdG8gZGVzY3JpYmUgd2hhdCB5b3UgYXJlIGFib3V0IHRvIGRvLiJ9LHsicm9sZSI6InVzZXIiLCJjb250ZW50IjoiaGkifV19","response_kind":"tool_calls","assistant_tool_calls_json":"W3siaWQiOiJjYWxsXzEiLCJ0eXBlIjoiZnVuY3Rpb24iLCJmdW5jdGlvbiI6eyJuYW1lIjoic2F5IiwiYXJndW1lbnRzIjoie1wibWVzc2FnZVwiOlwiaGVsbG8gZnJvbSB0aGUgdG9vbFwifSJ9fV0=","max_iterations":12,"stop_condition":"no_tool_finish"},"iteration":1,"timestamp":"T"}
+{"type":"tool_call","data":{"tool_call_id":"call_1","name":"say","arguments":"{\"message\":\"hello from the tool\"}"},"iteration":1,"timestamp":"T"}
+{"type":"tool_result","data":{"tool_call_id":"call_1","name":"say","result":"hello from the tool\n"},"iteration":1,"timestamp":"T"}
+{"type":"thinking","data":{"message":"Reasoning (iteration 2/12)…"},"iteration":2,"timestamp":"T"}
+{"type":"response","data":{"content":"The tool printed: hello from the tool"},"iteration":2,"timestamp":"T"}
+{"type":"done","data":{"reason":"finished","iterations":2,"final_content":"The tool printed: hello from the tool","llm_usage":{"input_tokens":280,"output_tokens":30,"total_tokens":310}},"iteration":2,"timestamp":"T"}

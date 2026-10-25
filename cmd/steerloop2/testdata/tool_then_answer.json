@@ -1,0 +1,5 @@
+{"steps": [
+  {"tool_calls": [{"id": "call_1", "name": "say", "arguments": {"message": "hello from the tool"}}],
+   "usage": {"input": 120, "output": 18}},
+  {"content": "The tool printed: hello from the tool", "usage": {"input": 160, "output": 12}}
+]}

@@ -35,13 +35,14 @@ type SteeringSource interface {
 
 // Run is one fully wired run, ready to execute. wire.go builds it.
 type Run struct {
-	loop       *loop2.Loop
-	messages   []*schema.Message
-	sinks      []EventSink // every event goes to each: the screen, then the recording if any
-	recording  *Recording  // nil: not recording
-	steering   SteeringSource
-	interrupts *interrupt.Watcher
-	stderr     io.Writer
+	loop        *loop2.Loop
+	messages    []*schema.Message
+	sinks       []EventSink // every event goes to each: the screen, then the recording if any
+	recording   *Recording  // nil: not recording
+	steering    SteeringSource
+	controlFile *os.File // what steering reads with --control-file; nil without
+	interrupts  *interrupt.Watcher
+	stderr      io.Writer
 }
 
 // Wire builds a Run from options. It is the only place that picks a concrete
@@ -54,7 +55,9 @@ func NewRun(ctx context.Context, env cli.Environment, opts Options) (*Run, error
 		return nil, err
 	}
 
-	humanAvailable := env.StdinIsTerminal()
+	// Someone can answer an ask_user or confirm question: a person at the
+	// terminal, or a program writing inject lines to --control-file.
+	humanAvailable := env.StdinIsTerminal() || opts.ControlPath != ""
 
 	tools, err := NewToolset(opts, humanAvailable)
 	if err != nil {
@@ -94,9 +97,17 @@ func NewRun(ctx context.Context, env cli.Environment, opts Options) (*Run, error
 		sink = render.NewText(env.Stderr(), env.Stdout(), cfg.StopCondition)
 	}
 
-	// SteeringSource: the terminal when a person is there, nothing otherwise.
+	// SteeringSource: the --control-file when given, else the terminal when a
+	// person is there, nothing otherwise.
 	var steer SteeringSource = steering.None{}
-	if humanAvailable {
+	var controlFile *os.File
+	switch {
+	case opts.ControlPath != "":
+		if controlFile, err = openControlFile(opts.ControlPath); err != nil {
+			return nil, err
+		}
+		steer = steering.NewControl(controlFile, env.Stderr())
+	case env.StdinIsTerminal():
 		steer = steering.NewTerminal(env.Stdin(), env.Stderr())
 	}
 
@@ -107,19 +118,23 @@ func NewRun(ctx context.Context, env cli.Environment, opts Options) (*Run, error
 	var recording *Recording
 	if opts.OutputRecordPath != "" {
 		if recording, err = OpenRecording(opts.OutputRecordPath, time.Now()); err != nil {
+			if controlFile != nil {
+				_ = controlFile.Close()
+			}
 			return nil, err
 		}
 		sinks = append(sinks, recording)
 	}
 
 	return &Run{
-		loop:       loop,
-		messages:   messages,
-		sinks:      sinks,
-		recording:  recording,
-		steering:   steer,
-		interrupts: interrupt.NewWatcher(env.Stderr()),
-		stderr:     env.Stderr(),
+		loop:        loop,
+		messages:    messages,
+		sinks:       sinks,
+		recording:   recording,
+		steering:    steer,
+		controlFile: controlFile,
+		interrupts:  interrupt.NewWatcher(env.Stderr()),
+		stderr:      env.Stderr(),
 	}, nil
 }
 
@@ -166,6 +181,10 @@ func (r *Run) Execute(parent context.Context) int {
 
 	defer r.closeRecording()
 
+	// Closing the control file ends goroutine 2 when it is blocked reading a
+	// FIFO that nobody writes to any more.
+	defer r.closeControl()
+
 	events := r.loop.Start(ctx, r.messages)
 
 	go r.steering.Steer(ctx, r.loop)
@@ -198,4 +217,11 @@ func (r *Run) closeRecording() {
 		return
 	}
 	fmt.Fprintf(r.stderr, "recorded to %s\n", r.recording.Path())
+}
+
+// closeControl closes the --control-file, if any.
+func (r *Run) closeControl() {
+	if r.controlFile != nil {
+		_ = r.controlFile.Close()
+	}
 }
