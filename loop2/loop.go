@@ -9,7 +9,6 @@ package loop2
 
 import (
 	"context"
-	"time"
 
 	"github.com/cloudwego/eino/schema"
 
@@ -58,6 +57,9 @@ type Loop struct {
 // the done event. The loop keeps its own copy of messages. A second call
 // returns a channel holding one fatal error.
 func (l *Loop) Start(ctx context.Context, messages []*schema.Message) <-chan event.Event {
+
+	messages = l.engine.Seed(messages) // seed the initial message + stop instructions from the chosen stop policy.
+
 	if !l.state.Begin(messages) {
 		return failedStart("loop already started")
 	}
@@ -103,7 +105,7 @@ func (l *Loop) State() State { return l.state.Status() }
 
 func failedStart(msg string) <-chan event.Event {
 	ch := make(chan event.Event, 1)
-	ch <- event.Event{Type: event.Error, Data: event.ErrorData{Error: msg, Fatal: true}, Timestamp: time.Now().UTC()}
+	ch <- event.New(event.ErrorData{Error: msg, Fatal: true}, 0)
 	close(ch)
 	return ch
 }

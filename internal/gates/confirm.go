@@ -30,7 +30,7 @@ func (g Confirm) Handle(ctx context.Context, call pause.Call, s pause.Session) (
 		return "This tool needs approval and nobody is available to give it. It was not run.", true
 	}
 
-	s.Emit(event.AwaitingInput, event.AwaitingInputData{
+	s.Emit(event.AwaitingInputData{
 		Question: fmt.Sprintf("Run %s %s?", call.Name, call.Arguments),
 		Options:  []string{"y", "n"},
 	})

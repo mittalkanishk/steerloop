@@ -53,7 +53,7 @@ func collectStream(ctx context.Context, m model.ToolCallingChatModel, msgs []*sc
 	var chunks []*schema.Message
 	firstChunkSeen := false
 	for {
-		// Before the first chunk only the step timeout applies: a reply that
+		// Before the first chunk only the iteration timeout applies: a reply that
 		// is only tool calls may send nothing until its final chunk.
 		var idle <-chan time.Time
 		if firstChunkSeen {

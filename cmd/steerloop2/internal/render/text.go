@@ -19,19 +19,19 @@ const maxPreview = 160
 // styles colour the trace. They are bound to the trace writer, so colour
 // turns off on its own when stderr is not a terminal or NO_COLOR is set.
 type styles struct {
-	step, tool, dim, ok, fail, ask, reply lipgloss.Style
+	iteration, tool, dim, ok, fail, ask, reply lipgloss.Style
 }
 
 func newStyles(w io.Writer) styles {
 	r := lipgloss.NewRenderer(w)
 	return styles{
-		step:  r.NewStyle().Bold(true).Foreground(lipgloss.Color("12")),
-		tool:  r.NewStyle().Bold(true).Foreground(lipgloss.Color("14")),
-		dim:   r.NewStyle().Faint(true),
-		ok:    r.NewStyle().Foreground(lipgloss.Color("10")),
-		fail:  r.NewStyle().Bold(true).Foreground(lipgloss.Color("9")),
-		ask:   r.NewStyle().Bold(true).Foreground(lipgloss.Color("11")),
-		reply: r.NewStyle().Italic(true),
+		iteration: r.NewStyle().Bold(true).Foreground(lipgloss.Color("12")),
+		tool:      r.NewStyle().Bold(true).Foreground(lipgloss.Color("14")),
+		dim:       r.NewStyle().Faint(true),
+		ok:        r.NewStyle().Foreground(lipgloss.Color("10")),
+		fail:      r.NewStyle().Bold(true).Foreground(lipgloss.Color("9")),
+		ask:       r.NewStyle().Bold(true).Foreground(lipgloss.Color("11")),
+		reply:     r.NewStyle().Italic(true),
 	}
 }
 
@@ -58,7 +58,10 @@ func (t *Text) Write(evt event.Event) {
 	switch d := evt.Data.(type) {
 
 	case event.ThinkingData:
-		fmt.Fprintf(t.trace, "\n%s\n", t.s.step.Render(fmt.Sprintf("── step %d ", evt.Iteration)))
+		fmt.Fprintf(t.trace, "\n%s\n", t.s.iteration.Render(fmt.Sprintf("── iteration %d ", evt.Iteration)))
+
+	case event.ProgressData:
+		fmt.Fprintf(t.trace, "  %s\n", t.s.dim.Render(d.Message))
 
 	case event.ToolCallData:
 		fmt.Fprintf(t.trace, "  %s %s\n", t.s.tool.Render("▸ "+d.Name), t.s.dim.Render(oneLine(d.Arguments)))
@@ -81,17 +84,24 @@ func (t *Text) Write(evt event.Event) {
 		fmt.Fprintf(t.trace, "  %s\n", t.s.fail.Render("error: "+d.Error))
 
 	case event.ResponseData:
-		// Under no-tool-calls the reply is the final answer, printed at Done.
-		if t.stop != loop2.StopOnNoToolCalls {
+		// Under no-tool-finish the reply is the final answer, printed at Done.
+		if t.stop != loop2.StopOnNoToolFinish {
 			fmt.Fprintf(t.trace, "  %s\n", t.s.reply.Render("│ "+oneLine(d.Content)))
 		}
+
+	case event.ReflectionData:
+		line := fmt.Sprintf("◆ %s %s", d.Mode, d.Verdict)
+		if d.Reason != "" {
+			line += ": " + oneLine(d.Reason)
+		}
+		fmt.Fprintf(t.trace, "  %s\n", t.s.dim.Render(line))
 
 	case event.DoneData:
 		mark := t.s.ok.Render("● " + string(d.Reason))
 		if d.Reason != event.ReasonFinished {
 			mark = t.s.fail.Render("● " + string(d.Reason))
 		}
-		fmt.Fprintf(t.trace, "\n%s %s\n\n", mark, t.s.dim.Render(fmt.Sprintf("· %d step(s) · %d tokens", d.Iterations, d.LLMUsage.TotalTokens)))
+		fmt.Fprintf(t.trace, "\n%s %s\n\n", mark, t.s.dim.Render(fmt.Sprintf("· %d iteration(s) · %d tokens", d.Iterations, d.LLMUsage.TotalTokens)))
 		if d.FinalContent != "" {
 			fmt.Fprintln(t.final, d.FinalContent)
 		}

@@ -52,9 +52,19 @@ type ResponseData struct {
 	Content string `json:"content"`
 }
 
-// ReflectionData is the payload of Reflection.
+// Reflection modes, as ReflectionData.Mode reports them.
+const (
+	ReflectOnIteration = "on_iteration"
+	ReflectOnFinish    = "on_finish"
+)
+
+// ReflectionData is the payload of Reflection: one judge's verdict.
 type ReflectionData struct {
-	Content string `json:"content"`
+	Mode       string  `json:"mode"`
+	Verdict    string  `json:"verdict"`
+	Reason     string  `json:"reason"`
+	Hint       string  `json:"hint,omitempty"`
+	Confidence float64 `json:"confidence"`
 }
 
 // ProgressData is the payload of Progress.
@@ -110,3 +120,16 @@ type DoneData struct {
 	DroppedEvents int             `json:"dropped_events,omitempty"`
 	LLMUsage      LLMUsageSummary `json:"llm_usage"`
 }
+
+// Each payload's Type is the label it is sent under.
+
+func (ThinkingData) Type() Type      { return Thinking }
+func (ToolCallData) Type() Type      { return ToolCall }
+func (ToolResultData) Type() Type    { return ToolResult }
+func (ResponseData) Type() Type      { return Response }
+func (ReflectionData) Type() Type    { return Reflection }
+func (ProgressData) Type() Type      { return Progress }
+func (ErrorData) Type() Type         { return Error }
+func (DoneData) Type() Type          { return Done }
+func (LLMTurnData) Type() Type       { return LLMTurn }
+func (AwaitingInputData) Type() Type { return AwaitingInput }

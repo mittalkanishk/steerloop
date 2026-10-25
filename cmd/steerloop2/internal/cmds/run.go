@@ -61,8 +61,9 @@ func NewRun(ctx context.Context, env cli.Environment, opts Options) (*Run, error
 	cfg.MaxIterations = opts.MaxIterations
 	cfg.Pauses = tools.Gates
 	cfg.StopCondition = stopConditions[opts.StopCondition] // basically a map of 3 accepted values.
+	cfg.Reflect = reflectConditions[opts.Reflect]
 	cfg.Temperature = opts.Temperature
-	cfg.StepTimeout = opts.StepTimeout
+	cfg.IterationTimeout = opts.IterationTimeout
 	cfg.TotalTimeout = opts.TotalTimeout
 
 	// Logger: the loop's debug log on stderr with --debug; nil discards it.

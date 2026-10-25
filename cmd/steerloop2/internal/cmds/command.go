@@ -35,7 +35,7 @@ func (c *Command) Run(ctx context.Context, args []string) int {
 
 	if err := opts.Validate(); err != nil {
 		// Validate joins every problem, one per line.
-		for _, line := range strings.Split(err.Error(), "\n") {
+		for line := range strings.SplitSeq(err.Error(), "\n") {
 			fmt.Fprintf(c.env.Stderr(), "steerloop2: %s\n", line)
 		}
 		return cli.ExitUsage

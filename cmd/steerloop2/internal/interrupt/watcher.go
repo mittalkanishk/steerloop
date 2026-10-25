@@ -13,7 +13,7 @@ import (
 	"github.com/mittalkanishk/steerloop/loop2"
 )
 
-// Watcher: the first Ctrl-C stops the loop after its current step, a second
+// Watcher: the first Ctrl-C stops the loop after its current iteration, a second
 // aborts outright.
 type Watcher struct {
 	stderr  io.Writer
@@ -35,7 +35,7 @@ func (w *Watcher) Watch(ctx context.Context, cancel context.CancelFunc, loop *lo
 		return
 	case <-signals:
 	}
-	fmt.Fprintln(w.stderr, "\nstopping after the current step (interrupt again to abort)")
+	fmt.Fprintln(w.stderr, "\nstopping after the current iteration (interrupt again to abort)")
 	loop.Stop()
 
 	// Second press: abort.
