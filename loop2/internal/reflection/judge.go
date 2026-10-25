@@ -22,7 +22,7 @@ type Judge struct {
 }
 
 func NewJudge(caller ModelCaller, base model.ToolCallingChatModel, prompt string) (Judge, error) {
-	
+
 	model, err := base.WithTools([]*schema.ToolInfo{verdictInfo})
 	if err != nil {
 		return Judge{}, fmt.Errorf("finish review: %w", err)
@@ -36,7 +36,7 @@ func NewJudge(caller ModelCaller, base model.ToolCallingChatModel, prompt string
 }
 
 func (j Judge) Rule(ctx context.Context, brief string) (Verdict, error) {
-	
+
 	msgs := []*schema.Message{
 		{Role: schema.System, Content: j.prompt},
 		{Role: schema.User, Content: brief},
@@ -46,7 +46,7 @@ func (j Judge) Rule(ctx context.Context, brief string) (Verdict, error) {
 	if err != nil {
 		return Verdict{}, err
 	}
-	
+
 	for _, tc := range reply.ToolCalls {
 		if tc.Function.Name != VerdictTool {
 			continue

@@ -6,7 +6,7 @@ Stop condition is a policy you choose before a run begins: when is the model/llm
 
 - `finish-tool` - model calling `finish-tool` recognized by the harness ends the run.
 
-- `external_finish` - model `cannot` end the run, because in this mode, **llm has not way to end the run**, it has no access to the finish-tool, and even the text answers of the model are ignored so plain text doesn't end the run, and it is told explicit in the prompt to keep working and never stopped until obviously base conditions like maximum cap or timeout are hit, that is only way model stops abruptly in the middle, hence external_finish.
+- `external_finish` - model `cannot` end the run, because in this mode, **llm has no way to end the run**, it has no access to the finish-tool and even the plain text answers of the model are ignored, so plain text doesn't end the run, and it is told explicitly in the prompt to keep working and never stop until obviously base conditions like **maximum cap** or **timeout** are hit, that is the only way model stops and yes it is  abruptly in the middle, hence the name external_finish.
 
 ### Reflection policy for agentic harness - 
 
