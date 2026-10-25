@@ -33,7 +33,7 @@ type History interface {
 
 // ModelCaller makes one model call for a pause handler. → modelcall.Caller
 type ModelCaller interface {
-	Call(ctx context.Context, m model.ToolCallingChatModel, msgs []*schema.Message) (*schema.Message, error)
+	Call(ctx context.Context, m model.ToolCallingChatModel, msgs []*schema.Message, opts ...model.Option) (*schema.Message, error)
 }
 
 // ReplyWaiter waits for the next injected message. → control.Inbox

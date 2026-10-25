@@ -41,3 +41,10 @@ func durationOr(v, fallback time.Duration) time.Duration {
 	}
 	return v
 }
+
+func stringOr(s, fallback string) string {
+	if s == "" {
+		return fallback
+	}
+	return s
+}

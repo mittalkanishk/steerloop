@@ -52,9 +52,19 @@ type ResponseData struct {
 	Content string `json:"content"`
 }
 
-// ReflectionData is the payload of Reflection.
+// Reflection modes, as ReflectionData.Mode reports them.
+const (
+	ReflectOnIteration = "on_iteration"
+	ReflectOnFinish    = "on_finish"
+)
+
+// ReflectionData is the payload of Reflection: one judge's verdict.
 type ReflectionData struct {
-	Content string `json:"content"`
+	Mode       string  `json:"mode"`
+	Verdict    string  `json:"verdict"`
+	Reason     string  `json:"reason"`
+	Hint       string  `json:"hint,omitempty"`
+	Confidence float64 `json:"confidence"`
 }
 
 // ProgressData is the payload of Progress.

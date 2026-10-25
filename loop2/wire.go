@@ -15,6 +15,7 @@ import (
 	"github.com/mittalkanishk/steerloop/loop2/internal/emitter"
 	"github.com/mittalkanishk/steerloop/loop2/internal/engine"
 	"github.com/mittalkanishk/steerloop/loop2/internal/modelcall"
+	"github.com/mittalkanishk/steerloop/loop2/internal/reflection"
 	"github.com/mittalkanishk/steerloop/loop2/internal/state"
 	stoppingPolicy "github.com/mittalkanishk/steerloop/loop2/internal/stopping_policy"
 	"github.com/mittalkanishk/steerloop/loop2/internal/transcript"
@@ -35,6 +36,9 @@ func New(cfg Config, llm model.ToolCallingChatModel, tools []*schema.ToolInfo, e
 	if logger == nil {
 		logger = defaults.DiscardLogger()
 	}
+
+	base := llm
+
 	if len(tools) > 0 {
 		bound, err := llm.WithTools(tools)
 		if err != nil {
@@ -48,9 +52,8 @@ func New(cfg Config, llm model.ToolCallingChatModel, tools []*schema.ToolInfo, e
 
 	// State: the only shared mutable data.
 	st := state.New(state.Settings{
-		MaxIterations:    cfg.MaxIterations,
-		Temperature:      cfg.Temperature,
-		EnableReflection: cfg.EnableReflection,
+		MaxIterations: cfg.MaxIterations,
+		Temperature:   cfg.Temperature,
 	})
 
 	// Events: the channel, its sink, the done-event guarantee.
@@ -78,12 +81,12 @@ func New(cfg Config, llm model.ToolCallingChatModel, tools []*schema.ToolInfo, e
 		classifier = cfg.ErrorClassifier
 	}
 	caller := modelcall.New(modelcall.Timing{
-		StepTimeout:         cfg.StepTimeout,
-		DecoupleStepTimeout: !cfg.DisableStepTimeoutDecoupling,
-		IdleChunkTimeout:    durationOr(cfg.IdleChunkTimeout, defaultIdleChunkTimeout),
-		RetryAttempts:       retryAttempts(cfg.RetryMaxAttempts),
-		Streaming:           !cfg.DisableStreaming,
-	}, st, options, classifier, logger)
+		IterationTimeout:         cfg.IterationTimeout,
+		DecoupleIterationTimeout: !cfg.DisableIterationTimeoutDecoupling,
+		IdleChunkTimeout:         durationOr(cfg.IdleChunkTimeout, defaultIdleChunkTimeout),
+		RetryAttempts:            retryAttempts(cfg.RetryMaxAttempts),
+		Streaming:                !cfg.DisableStreaming,
+	}, st, options, classifier, logger, st)
 
 	// Tool calls: the executor, or a pause handler for the tools that have one.
 	handlers := map[string]pause.Handler{}
@@ -107,6 +110,10 @@ func New(cfg Config, llm model.ToolCallingChatModel, tools []*schema.ToolInfo, e
 
 	// The stop condition, decided once.
 	stop := stopPolicy(cfg)
+	reviewer, err := reflectionPolicy(cfg, caller, base)
+	if err != nil {
+		return nil, fmt.Errorf("loop2: %w", err)
+	}
 
 	// Audit records of each turn.
 	var identity audit.ModelIdentifier = defaults.NoIdentity{}
@@ -121,11 +128,6 @@ func New(cfg Config, llm model.ToolCallingChatModel, tools []*schema.ToolInfo, e
 	var compactor engine.HistoryCompactor = defaults.FullHistory{}
 	if cfg.HistoryCompactor != nil {
 		compactor = cfg.HistoryCompactor
-	}
-
-	reflectionPrompt := cfg.ReflectionPrompt
-	if reflectionPrompt == "" {
-		reflectionPrompt = defaultReflectionPrompt
 	}
 
 	log := transcript.New(logger, cfg.TranscriptLogLevel)
@@ -144,7 +146,8 @@ func New(cfg Config, llm model.ToolCallingChatModel, tools []*schema.ToolInfo, e
 		Transcript:       log,
 		Logger:           logger,
 		TotalTimeout:     cfg.TotalTimeout,
-		ReflectionPrompt: reflectionPrompt,
+		Reviewer:         reviewer,
+		MaxReopens:       positiveOr(cfg.MaxReopens, defaultMaxReopens),
 		StopInstructions: stopInstructions(cfg, stop),
 	})
 
@@ -172,7 +175,7 @@ func stopPolicy(cfg Config) engine.StopPolicy {
 	case StopOnExternal:
 		return stoppingPolicy.ExternalFinish{}
 	default:
-		return stoppingPolicy.NoToolCalls{}
+		return stoppingPolicy.NoToolFinish{}
 	}
 }
 
@@ -193,4 +196,23 @@ func stopInstructions(cfg Config, stop engine.StopPolicy) string {
 		return cfg.StopInstructions
 	}
 	return stop.Instructions()
+}
+
+func reflectionPolicy(cfg Config, caller *modelcall.Caller, base model.ToolCallingChatModel) (engine.Reviewer, error) {
+	switch cfg.Reflect {
+	case ReflectOnIteration:
+		judge, err := reflection.NewJudge(caller, base, stringOr(cfg.IterationReviewPrompt, defaultIterationReviewPrompt))
+		if err != nil {
+			return nil, err
+		}
+		return reflection.NewOnIteration(judge), nil
+	case ReflectOnFinish:
+		judge, err := reflection.NewJudge(caller, base, stringOr(cfg.FinishReviewPrompt, defaultFinishReviewPrompt))
+		if err != nil {
+			return nil, err
+		}
+		return reflection.NewOnFinish(judge), nil
+	default:
+		return reflection.Off{}, nil
+	}
 }

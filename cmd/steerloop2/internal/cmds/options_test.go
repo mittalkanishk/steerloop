@@ -12,15 +12,16 @@ import (
 
 func validOptions() Options {
 	return Options{
-		UserPrompt:    "hello",
-		Model:         "script:steps.json",
-		Temperature:   -1,
-		MaxTokens:     4096,
-		MaxIterations: 12,
-		StepTimeout:   time.Minute,
-		TotalTimeout:  10 * time.Minute,
-		StopCondition: "no-tool-calls",
-		Output:        "text",
+		UserPrompt:       "hello",
+		Model:            "script:steps.json",
+		Temperature:      -1,
+		MaxTokens:        4096,
+		MaxIterations:    12,
+		IterationTimeout: time.Minute,
+		TotalTimeout:     10 * time.Minute,
+		StopCondition:    "no-tool-finish",
+		Reflect:          "off",
+		Output:           "text",
 	}
 }
 
@@ -38,8 +39,8 @@ func TestValidateAcceptsEdgeValues(t *testing.T) {
 	for name, change := range map[string]func(*Options){
 		"temperature 0":           func(o *Options) { o.Temperature = 0 },
 		"temperature 2":           func(o *Options) { o.Temperature = 2 },
-		"no timeouts":             func(o *Options) { o.StepTimeout, o.TotalTimeout = 0, 0 },
-		"step timeout only":       func(o *Options) { o.TotalTimeout = 0 },
+		"no timeouts":             func(o *Options) { o.IterationTimeout, o.TotalTimeout = 0, 0 },
+		"iteration timeout only":  func(o *Options) { o.TotalTimeout = 0 },
 		"skip-confirm with tools": func(o *Options) { o.AutoApprove, o.ToolsManifestPath = true, "tools.yaml" },
 	} {
 		opts := validOptions()
@@ -65,10 +66,12 @@ func TestValidateRejects(t *testing.T) {
 		{"temperature too high", func(o *Options) { o.Temperature = 2.5 }, "--temperature must be at most 2"},
 		{"zero max tokens", func(o *Options) { o.MaxTokens = 0 }, "--max-tokens must be at least 1"},
 		{"zero iterations", func(o *Options) { o.MaxIterations = 0 }, "--max-iterations must be at least 1"},
-		{"negative step timeout", func(o *Options) { o.StepTimeout = -time.Second }, "--step-timeout must not be negative"},
+		{"negative iteration timeout", func(o *Options) { o.IterationTimeout = -time.Second }, "--iteration-timeout must not be negative"},
 		{"negative total timeout", func(o *Options) { o.TotalTimeout = -time.Second }, "--total-timeout must not be negative"},
-		{"step longer than total", func(o *Options) { o.StepTimeout = time.Hour }, "--step-timeout (1h0m0s) must not exceed --total-timeout (10m0s)"},
-		{"unknown stop condition", func(o *Options) { o.StopCondition = "never" }, `--stop-condition must be no-tool-calls, finish-tool or explicit, not "never"`},
+		{"iteration longer than total", func(o *Options) { o.IterationTimeout = time.Hour }, "--iteration-timeout (1h0m0s) must not exceed --total-timeout (10m0s)"},
+		{"unknown stop condition", func(o *Options) { o.StopCondition = "never" }, `--stop-condition must be no-tool-finish, finish-tool or explicit, not "never"`},
+		{"unknown reflect", func(o *Options) { o.Reflect = "always" }, `--reflect must be off, on-iteration or on-finish, not "always"`},
+		{"on-finish never runs", func(o *Options) { o.Reflect, o.StopCondition = "on-finish", "external-finish" }, "--reflect on-finish has no effect"},
 		{"skip-confirm without tools", func(o *Options) { o.AutoApprove = true }, "--skip-confirm has no effect without --tools"},
 		{"unknown output", func(o *Options) { o.Output = "json" }, `--output must be text or jsonl, not "json"`},
 	}

@@ -4,6 +4,7 @@
 package state
 
 import (
+	"slices"
 	"sync"
 
 	"github.com/cloudwego/eino/schema"
@@ -119,6 +120,19 @@ func (r *Run) Messages() []*schema.Message {
 	out := make([]*schema.Message, len(r.messages))
 	copy(out, r.messages)
 	return out
+}
+
+// LastReply returns the text of the model's latest reply that had any, or
+// "" when there is none.
+func (r *Run) LastReply() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, m := range slices.Backward(r.messages) {
+		if m.Role == schema.Assistant && m.Content != "" {
+			return m.Content
+		}
+	}
+	return ""
 }
 
 func (r *Run) Append(msg *schema.Message) {

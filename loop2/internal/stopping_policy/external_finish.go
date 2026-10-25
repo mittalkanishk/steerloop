@@ -8,7 +8,7 @@ type ExternalFinish struct{}
 func (ExternalFinish) Label() string { return "external_finish" }
 
 func (ExternalFinish) Instructions() string {
-	return "This run does not end when you finish a task. Only the user, or a step or " +
+	return "This run does not end when you finish a task. Only the user, or an iteration or " +
 		"time limit, can end it. Work step by step. When you have nothing left to do, " +
 		"reply with a short status of what is done and what you are waiting for, " +
 		"rather than repeating earlier work."

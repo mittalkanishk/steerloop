@@ -3,16 +3,14 @@ package state
 // Settings are the parts of the configuration a caller may change while the
 // loop runs.
 type Settings struct {
-	MaxIterations    int
-	Temperature      float64
-	EnableReflection bool
+	MaxIterations int
+	Temperature   float64
 }
 
 // Change is a change to Settings. Nil fields are left unchanged.
 type Change struct {
-	MaxIterations    *int
-	Temperature      *float64
-	EnableReflection *bool
+	MaxIterations *int
+	Temperature   *float64
 }
 
 // Apply changes the settings.
@@ -24,9 +22,6 @@ func (r *Run) Apply(c Change) {
 	}
 	if c.Temperature != nil {
 		r.settings.Temperature = *c.Temperature
-	}
-	if c.EnableReflection != nil {
-		r.settings.EnableReflection = *c.EnableReflection
 	}
 }
 
@@ -40,10 +35,4 @@ func (r *Run) Temperature() float64 {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.settings.Temperature
-}
-
-func (r *Run) ReflectionEnabled() bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.settings.EnableReflection
 }

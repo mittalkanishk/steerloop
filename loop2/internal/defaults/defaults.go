@@ -57,7 +57,7 @@ type Classifier struct{}
 
 func (Classifier) IsTransient(err error) bool { return IsTransientLLMError(err) }
 
-// IsTransientLLMError reports true for a step deadline, EOF, an empty reply,
+// IsTransientLLMError reports true for an iteration deadline, EOF, an empty reply,
 // an idle stream and a reset connection.
 func IsTransientLLMError(err error) bool {
 	if err == nil {

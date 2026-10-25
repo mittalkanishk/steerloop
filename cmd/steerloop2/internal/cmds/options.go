@@ -13,15 +13,15 @@ import (
 )
 
 var stopConditions = map[string]loop2.StopCondition{
-	"no-tool-calls":   loop2.StopOnNoToolCalls,
+	"no-tool-finish":  loop2.StopOnNoToolFinish,
 	"finish-tool":     loop2.StopOnFinishTool,
 	"external-finish": loop2.StopOnExternal,
 }
 
 var reflectConditions = map[string]loop2.ReflectCondition{
-	"off":       loop2.ReflectOff,
-	"on-steps":  loop2.ReflectOnSteps,
-	"on-finish": loop2.ReflectOnFinish,
+	"off":          loop2.ReflectOff,
+	"on-iteration": loop2.ReflectOnIteration,
+	"on-finish":    loop2.ReflectOnFinish,
 }
 
 // Options is the `steerloop2 run` command line.
@@ -34,11 +34,11 @@ type Options struct {
 	Temperature float64 // below 0: not sent, so the provider's default applies
 	MaxTokens   int
 	// Loop Options
-	MaxIterations int
-	StepTimeout   time.Duration
-	TotalTimeout  time.Duration
-	StopCondition string
-	Reflect       string // "on-steps" or "on-finish"
+	MaxIterations    int
+	IterationTimeout time.Duration
+	TotalTimeout     time.Duration
+	StopCondition    string
+	Reflect          string // "on-iteration" or "on-finish"
 	// Tool Options
 	ToolsManifestPath string
 	AutoApprove       bool
@@ -69,10 +69,10 @@ func ParseOptions(args []string, stderr io.Writer) (Options, error) {
 	flags.IntVar(&opts.MaxTokens, "max-tokens", 4096, "cap on reply length, for providers that need one")
 	// Loop Flags
 	flags.IntVar(&opts.MaxIterations, "max-iterations", 12, "cap on model calls")
-	flags.DurationVar(&opts.StepTimeout, "step-timeout", time.Minute, "time allowed for one model call")
+	flags.DurationVar(&opts.IterationTimeout, "iteration-timeout", time.Minute, "time allowed for one model call")
 	flags.DurationVar(&opts.TotalTimeout, "total-timeout", 10*time.Minute, "time allowed for the whole run")
-	flags.StringVar(&opts.StopCondition, "stop-condition", "no-tool-calls", "when the loop ends: no-tool-calls, finish-tool or explicit")
-	flags.StringVar(&opts.Reflect, "reflect", "off", "when to reflect: off, on-steps or on-finish")
+	flags.StringVar(&opts.StopCondition, "stop-condition", "no-tool-finish", "when the loop ends: no-tool-finish, finish-tool or explicit")
+	flags.StringVar(&opts.Reflect, "reflect", "off", "when to reflect: off, on-iteration or on-finish")
 	// Tool Flags
 	flags.StringVar(&opts.ToolsManifestPath, "tools", "", "path to a tool manifest (YAML)")
 	flags.BoolVar(&opts.AskUser, "ask-user", false, "give the model an ask_user tool")
@@ -125,20 +125,23 @@ func (o Options) Validate() error {
 	if o.MaxIterations < 1 {
 		fail("--max-iterations must be at least 1")
 	}
-	if o.StepTimeout < 0 {
-		fail("--step-timeout must not be negative (0 means no limit)")
+	if o.IterationTimeout < 0 {
+		fail("--iteration-timeout must not be negative (0 means no limit)")
 	}
 	if o.TotalTimeout < 0 {
 		fail("--total-timeout must not be negative (0 means no limit)")
 	}
-	if o.StepTimeout > 0 && o.TotalTimeout > 0 && o.StepTimeout > o.TotalTimeout {
-		fail("--step-timeout (%s) must not exceed --total-timeout (%s)", o.StepTimeout, o.TotalTimeout)
+	if o.IterationTimeout > 0 && o.TotalTimeout > 0 && o.IterationTimeout > o.TotalTimeout {
+		fail("--iteration-timeout (%s) must not exceed --total-timeout (%s)", o.IterationTimeout, o.TotalTimeout)
 	}
 	if _, ok := stopConditions[o.StopCondition]; !ok {
-		fail("--stop-condition must be no-tool-calls, finish-tool or explicit, not %q", o.StopCondition)
+		fail("--stop-condition must be no-tool-finish, finish-tool or explicit, not %q", o.StopCondition)
 	}
 	if _, ok := reflectConditions[o.Reflect]; !ok {
-		fail("--reflect must be on-steps or on-finish, not %q", o.Reflect)
+		fail("--reflect must be off, on-iteration or on-finish, not %q", o.Reflect)
+	}
+	if o.Reflect == "on-finish" && o.StopCondition == "external-finish" {
+		fail("--reflect on-finish has no effect with --stop-condition external-finish: the model never finishes")
 	}
 
 	// Tools
