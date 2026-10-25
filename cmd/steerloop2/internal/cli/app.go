@@ -9,13 +9,20 @@ import (
 	"io"
 )
 
-const usage = `steerloop2 runs an agent loop from the terminal.
+// Usage is the top-level help: every command, one line each.
+const Usage = `steerloop2 runs an agent loop from the terminal.
 
 Usage:
-  steerloop2 run --model <spec> --prompt <text> [flags]
+  steerloop2 run --model <spec> --user-prompt <text> [flags]   run one loop
+  steerloop2 replay --path <file.jsonl> [flags]                 play back a recorded run
+  steerloop2 tools validate --path <manifest>                   check a tool manifest
+  steerloop2 version                                            print the version
+  steerloop2 help                                               show this help
+
+Run 'steerloop2 <command> -h' for a command's flags.
 `
 
-// Command is one `steerloop2 <name>` subcommand. → internal/runcmd
+// Command is one `steerloop2 <name>` subcommand. → internal/cmds/run
 type Command interface {
 	Run(ctx context.Context, args []string) int
 }
@@ -46,13 +53,13 @@ func NewApp(env Environment, commands map[string]Command) *App {
 
 func (a *App) Run(ctx context.Context, args []string) int {
 	if len(args) == 0 {
-		fmt.Fprint(a.env.Stderr(), usage)
+		fmt.Fprint(a.env.Stderr(), Usage)
 		return ExitUsage
 	}
 
 	cmd, ok := a.commands[args[0]]
 	if !ok {
-		fmt.Fprintf(a.env.Stderr(), "steerloop2: unknown command %q\n\n%s", args[0], usage)
+		fmt.Fprintf(a.env.Stderr(), "steerloop2: unknown command %q\n\n%s", args[0], Usage)
 		return ExitUsage
 	}
 

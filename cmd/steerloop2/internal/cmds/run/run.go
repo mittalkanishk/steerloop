@@ -3,9 +3,11 @@ package runcmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/cloudwego/eino/schema"
 
@@ -35,9 +37,11 @@ type SteeringSource interface {
 type Run struct {
 	loop       *loop2.Loop
 	messages   []*schema.Message
-	sink       EventSink
+	sinks      []EventSink // every event goes to each: the screen, then the recording if any
+	recording  *Recording  // nil: not recording
 	steering   SteeringSource
 	interrupts *interrupt.Watcher
+	stderr     io.Writer
 }
 
 // Wire builds a Run from options. It is the only place that picks a concrete
@@ -96,12 +100,26 @@ func NewRun(ctx context.Context, env cli.Environment, opts Options) (*Run, error
 		steer = steering.NewTerminal(env.Stdin(), env.Stderr())
 	}
 
+	sinks := []EventSink{sink}
+
+	// Recording: a second sink, opened last so no earlier failure leaves an
+	// empty file behind. An empty --output-record-path turns it off.
+	var recording *Recording
+	if opts.OutputRecordPath != "" {
+		if recording, err = OpenRecording(opts.OutputRecordPath, time.Now()); err != nil {
+			return nil, err
+		}
+		sinks = append(sinks, recording)
+	}
+
 	return &Run{
 		loop:       loop,
 		messages:   messages,
-		sink:       sink,
+		sinks:      sinks,
+		recording:  recording,
 		steering:   steer,
 		interrupts: interrupt.NewWatcher(env.Stderr()),
+		stderr:     env.Stderr(),
 	}, nil
 }
 
@@ -146,6 +164,8 @@ func (r *Run) Execute(parent context.Context) int {
 
 	defer cancel()
 
+	defer r.closeRecording()
+
 	events := r.loop.Start(ctx, r.messages)
 
 	go r.steering.Steer(ctx, r.loop)
@@ -154,7 +174,9 @@ func (r *Run) Execute(parent context.Context) int {
 
 	// Ends when the loop closes the channel after its final Done event.
 	for evt := range events {
-		r.sink.Write(evt)
+		for _, sink := range r.sinks {
+			sink.Write(evt)
+		}
 	}
 
 	if r.interrupts.Aborted() {
@@ -164,4 +186,16 @@ func (r *Run) Execute(parent context.Context) int {
 	result, _ := r.loop.Result()
 
 	return cli.ExitCodeFor(result.Reason)
+}
+
+// closeRecording closes the recording, if any, and says where it is.
+func (r *Run) closeRecording() {
+	if r.recording == nil {
+		return
+	}
+	if err := r.recording.Close(); err != nil {
+		fmt.Fprintf(r.stderr, "steerloop2: record: %v\n", err)
+		return
+	}
+	fmt.Fprintf(r.stderr, "recorded to %s\n", r.recording.Path())
 }

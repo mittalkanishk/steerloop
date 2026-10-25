@@ -44,8 +44,11 @@ type Options struct {
 	AutoApprove       bool
 	AskUser           bool
 	// Output Options
-	Output string
-	Debug  bool
+	Output           string
+	OutputRecordPath string // also write every event to a JSONL file
+	Debug            bool
+	// Steering/Loop Control Options
+	ControlPath string // give the loop a stream of commands that arrive over time, same as if a person typed it at the terminal
 }
 
 // maxTemperature is the highest temperature any supported provider accepts
@@ -80,6 +83,10 @@ func ParseOptions(args []string, stderr io.Writer) (Options, error) {
 	// Output Flags
 	flags.StringVar(&opts.Output, "output", "text", "text or jsonl")
 	flags.BoolVar(&opts.Debug, "debug", false, "write the loop's debug log to stderr")
+	flags.StringVar(&opts.OutputRecordPath, "output-record-path", defaultRecordDir, `record every event as JSONL: a folder gets one new file per run, a path ending in .jsonl is used as is; a relative folder is under the repo root; "" turns recording off`)
+	// Steering the loop
+	flags.StringVar(&opts.ControlPath, "control-file", "", "give the loop a stream of commands that arrive over time, same as if a person typed it at the terminal")
+
 	if err := flags.Parse(args); err != nil {
 		return opts, err
 	}
