@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mittalkanishk/steerloop/loop2/event"
+	"github.com/mittalkanishk/steerloop/loop/event"
 )
 
 // TestReadRoundTrip writes one event of every type with JSONL and reads it

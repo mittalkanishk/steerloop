@@ -13,9 +13,9 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
-	"github.com/mittalkanishk/steerloop/loop2"
-	"github.com/mittalkanishk/steerloop/loop2/event"
-	"github.com/mittalkanishk/steerloop/loop2/pause"
+	"github.com/mittalkanishk/steerloop/loop"
+	"github.com/mittalkanishk/steerloop/loop/event"
+	"github.com/mittalkanishk/steerloop/loop/pause"
 	"github.com/mittalkanishk/steerloop/steerlooptest"
 )
 
@@ -38,7 +38,7 @@ type noTools struct{}
 func (noTools) ExecuteTool(context.Context, string, string) (string, error) { return "", nil }
 
 func main() {
-	askUserInfo, err := loop2.NewToolInfo("ask_user", "Ask the user a question.", map[string]any{
+	askUserInfo, err := loop.NewToolInfo("ask_user", "Ask the user a question.", map[string]any{
 		"type":       "object",
 		"properties": map[string]any{"question": map[string]any{"type": "string"}},
 		"required":   []string{"question"},
@@ -54,10 +54,10 @@ func main() {
 		steerlooptest.Step{Content: "Thanks. I will use that title."},
 	)
 
-	cfg := loop2.DefaultConfig()
+	cfg := loop.DefaultConfig()
 	cfg.Pauses = map[string]pause.Handler{"ask_user": askUser{}}
 
-	loop, err := loop2.New(cfg, chatModel, []*schema.ToolInfo{askUserInfo}, noTools{}, nil)
+	loop, err := loop.New(cfg, chatModel, []*schema.ToolInfo{askUserInfo}, noTools{}, nil)
 	if err != nil {
 		log.Fatal(err)
 	}

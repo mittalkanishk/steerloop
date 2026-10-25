@@ -9,7 +9,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/mittalkanishk/steerloop/loop2/event"
+	"github.com/mittalkanishk/steerloop/loop/event"
 )
 
 // maxLine caps one recorded event. A tool result or an audit record can be

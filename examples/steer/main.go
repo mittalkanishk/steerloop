@@ -11,8 +11,8 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
-	"github.com/mittalkanishk/steerloop/loop2"
-	"github.com/mittalkanishk/steerloop/loop2/event"
+	"github.com/mittalkanishk/steerloop/loop"
+	"github.com/mittalkanishk/steerloop/loop/event"
 	"github.com/mittalkanishk/steerloop/steerlooptest"
 )
 
@@ -23,15 +23,15 @@ func (noTools) ExecuteTool(context.Context, string, string) (string, error) { re
 
 // steer drives the running loop the way a caller would: a message, a
 // settings change, then a stop.
-func steer(loop *loop2.Loop) {
+func steer(l *loop.Loop) {
 	time.Sleep(100 * time.Millisecond)
-	loop.Inject("Focus on results from this year.") // seen by the next model call
+	l.Inject("Focus on results from this year.") // seen by the next model call
 
 	more := 50
-	loop.ModifyConfig(loop2.ConfigChange{MaxIterations: &more})
+	l.ModifyConfig(loop.ConfigChange{MaxIterations: &more})
 
 	time.Sleep(700 * time.Millisecond)
-	loop.Stop() // takes effect at the next iteration boundary
+	l.Stop() // takes effect at the next iteration boundary
 }
 
 func main() {
@@ -39,11 +39,11 @@ func main() {
 		steerlooptest.Step{Content: "Still researching…", Delay: 200 * time.Millisecond},
 	)
 
-	cfg := loop2.DefaultConfig()
-	cfg.StopCondition = loop2.StopOnExternal // run until told to stop
+	cfg := loop.DefaultConfig()
+	cfg.StopCondition = loop.StopOnExternal // run until told to stop
 	cfg.MaxIterations = 3
 
-	loop, err := loop2.New(cfg, chatModel, nil, noTools{}, nil)
+	loop, err := loop.New(cfg, chatModel, nil, noTools{}, nil)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -1,6 +1,6 @@
 // Package gates holds pause handlers for tool calls that need a person
 // before they can finish. Each type implements pause.Handler and touches
-// only loop2's public types, so any front end in this module (the CLI, a
+// only loop's public types, so any front end in this module (the CLI, a
 // future server) can use it.
 package gates
 
@@ -11,9 +11,9 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
-	"github.com/mittalkanishk/steerloop/loop2"
-	"github.com/mittalkanishk/steerloop/loop2/event"
-	"github.com/mittalkanishk/steerloop/loop2/pause"
+	"github.com/mittalkanishk/steerloop/loop"
+	"github.com/mittalkanishk/steerloop/loop/event"
+	"github.com/mittalkanishk/steerloop/loop/pause"
 )
 
 // AskUserToolName is the tool the model calls to ask the person a question.
@@ -21,7 +21,7 @@ const AskUserToolName = "ask_user"
 
 // AskUserToolInfo describes the ask_user tool to the model.
 func AskUserToolInfo() (*schema.ToolInfo, error) {
-	return loop2.NewToolInfo(AskUserToolName, "Ask the person running this session a question and wait for the answer.", map[string]any{
+	return loop.NewToolInfo(AskUserToolName, "Ask the person running this session a question and wait for the answer.", map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"question": map[string]any{"type": "string", "description": "The question to ask."},
