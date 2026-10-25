@@ -85,7 +85,7 @@ func ParseOptions(args []string, stderr io.Writer) (Options, error) {
 	flags.BoolVar(&opts.Debug, "debug", false, "write the loop's debug log to stderr")
 	flags.StringVar(&opts.OutputRecordPath, "output-record-path", defaultRecordDir, `record every event as JSONL: a folder gets one new file per run, a path ending in .jsonl is used as is; a relative folder is under the repo root; "" turns recording off`)
 	// Steering the loop
-	flags.StringVar(&opts.ControlPath, "control-file", "", "give the loop a stream of commands that arrive over time, same as if a person typed it at the terminal")
+	flags.StringVar(&opts.ControlPath, "control-file", "", `steer the run from JSONL lines in this file or FIFO: {"type":"stop"}, {"type":"inject","message":"..."} or {"type":"modify_config","max_iterations":N,"temperature":T}; "wait_ms" delays a line`)
 
 	if err := flags.Parse(args); err != nil {
 		return opts, err

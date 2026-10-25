@@ -12,13 +12,27 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
-	"github.com/mittalkanishk/steerloop"
+	"github.com/mittalkanishk/steerloop/loop2"
+	"github.com/mittalkanishk/steerloop/loop2/event"
 	"github.com/mittalkanishk/steerloop/steerlooptest"
 )
 
+// upper is the loop's ToolExecutor: it runs the one tool, "upper".
+type upper struct{}
+
+func (upper) ExecuteTool(_ context.Context, _ string, arguments string) (string, error) {
+	var args struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal([]byte(arguments), &args); err != nil {
+		return "", err // the model sees this as the tool's error
+	}
+	return strings.ToUpper(args.Text), nil
+}
+
 func main() {
 
-	upper, err := steerloop.NewToolInfo("upper", "Upper-case a string.", map[string]any{
+	upperInfo, err := loop2.NewToolInfo("upper", "Upper-case a string.", map[string]any{
 		"type":       "object",
 		"properties": map[string]any{"text": map[string]any{"type": "string"}},
 		"required":   []string{"text"},
@@ -32,17 +46,7 @@ func main() {
 		steerlooptest.Step{Content: "The tool returned HELLO."},
 	)
 
-	executor := steerloop.ToolExecutorFunc(func(_ context.Context, name, arguments string) (string, error) {
-		var args struct {
-			Text string `json:"text"`
-		}
-		if err := json.Unmarshal([]byte(arguments), &args); err != nil {
-			return "", err // the model sees this as the tool's error
-		}
-		return strings.ToUpper(args.Text), nil
-	})
-
-	loop, err := steerloop.New(steerloop.DefaultConfig(), chatModel, []*schema.ToolInfo{upper}, executor, nil)
+	loop, err := loop2.New(loop2.DefaultConfig(), chatModel, []*schema.ToolInfo{upperInfo}, upper{}, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -51,11 +55,11 @@ func main() {
 
 	for evt := range loop.Start(context.Background(), messages) {
 		switch data := evt.Data.(type) {
-		case steerloop.ToolCallData:
+		case event.ToolCallData:
 			fmt.Printf("tool call:   %s %s\n", data.Name, data.Arguments)
-		case steerloop.ToolResultData:
+		case event.ToolResultData:
 			fmt.Printf("tool result: %s\n", data.Result)
-		case steerloop.DoneData:
+		case event.DoneData:
 			fmt.Printf("%s: %s\n", data.Reason, data.FinalContent)
 		}
 	}

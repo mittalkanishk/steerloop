@@ -58,15 +58,15 @@ jobs:
 
       - name: Coverage gate (library, 85%)
         run: |
-          go test -count=1 -coverprofile=lib.out .
+          go test -count=1 -coverpkg=./loop2/... -coverprofile=lib.out ./loop2/...
           total=$(go tool cover -func=lib.out | awk '/^total:/ {print substr($3, 1, length($3)-1)}')
           echo "library coverage: ${total}%"
           awk -v t="$total" 'BEGIN { exit (t >= 85.0) ? 0 : 1 }'
 
       - name: Fuzz (30s)
         run: |
-          go test -run '^$' -fuzz FuzzNewToolInfo -fuzztime 15s .
-          go test -run '^$' -fuzz FuzzSerializeEinoMessagesForAudit -fuzztime 15s .
+          go test -run '^$' -fuzz FuzzNewToolInfo -fuzztime 15s ./loop2
+          go test -run '^$' -fuzz FuzzSerializeMessages -fuzztime 15s ./loop2/internal/audit
 
       - name: Vulnerability check
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...

@@ -1,5 +1,6 @@
-// Command steerloop2 is the `run` command of steerloop in an interface-first,
-// nested shape. Each interface is declared in the file that uses it.
+// Command steerloop2 runs an agent loop from the terminal: run, replay,
+// tools validate, version and help. It is built interface-first and nested:
+// each interface is declared in the file that uses it.
 //
 // Read in this order:
 //
@@ -22,12 +23,16 @@ import (
 )
 
 func main() {
-	env := osenv.Real{}
+	os.Exit(newApp(osenv.Real{}).Run(context.Background(), os.Args[1:]))
+}
 
+// newApp registers every command against env. main passes the real OS;
+// the CLI tests pass a fake one.
+func newApp(env cli.Environment) *cli.App {
 	help := helpcmd.New(env)
 	version := versioncmd.New(env)
 
-	app := cli.NewApp(env, map[string]cli.Command{
+	return cli.NewApp(env, map[string]cli.Command{
 		"run":       runcmd.New(env),
 		"replay":    replaycmd.New(env),
 		"tools":     toolsvalidatecmd.New(env),
@@ -37,6 +42,4 @@ func main() {
 		"-h":        help,
 		"--help":    help,
 	})
-
-	os.Exit(app.Run(context.Background(), os.Args[1:]))
 }

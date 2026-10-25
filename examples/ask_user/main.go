@@ -1,6 +1,6 @@
 // Ask_user shows a pause tool: when the model calls ask_user, the loop hands
-// the call to a function that waits for a person, and the answer becomes the
-// tool's result.
+// the call to a pause.Handler that waits for a person, and the answer becomes
+// the tool's result.
 package main
 
 import (
@@ -13,12 +13,32 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
-	"github.com/mittalkanishk/steerloop"
+	"github.com/mittalkanishk/steerloop/loop2"
+	"github.com/mittalkanishk/steerloop/loop2/event"
+	"github.com/mittalkanishk/steerloop/loop2/pause"
 	"github.com/mittalkanishk/steerloop/steerlooptest"
 )
 
+// askUser handles ask_user calls in place of the ToolExecutor: it announces
+// the question, then waits for the next injected message as the answer.
+type askUser struct{}
+
+func (askUser) Handle(ctx context.Context, call pause.Call, s pause.Session) (string, bool) {
+	var args struct {
+		Question string `json:"question"`
+	}
+	_ = json.Unmarshal([]byte(call.Arguments), &args)
+	s.Emit(event.AwaitingInputData{Question: args.Question})
+	return s.AwaitReply(ctx) // returns the next Inject
+}
+
+// noTools is the ToolExecutor for a loop whose only tool is a pause tool.
+type noTools struct{}
+
+func (noTools) ExecuteTool(context.Context, string, string) (string, error) { return "", nil }
+
 func main() {
-	askUser, err := steerloop.NewToolInfo("ask_user", "Ask the user a question.", map[string]any{
+	askUserInfo, err := loop2.NewToolInfo("ask_user", "Ask the user a question.", map[string]any{
 		"type":       "object",
 		"properties": map[string]any{"question": map[string]any{"type": "string"}},
 		"required":   []string{"question"},
@@ -33,23 +53,11 @@ func main() {
 		}},
 		steerlooptest.Step{Content: "Thanks. I will use that title."},
 	)
-	executor := steerloop.ToolExecutorFunc(func(context.Context, string, string) (string, error) {
-		return "", nil
-	})
 
-	cfg := steerloop.DefaultConfig()
-	cfg.Pauses = map[string]steerloop.PauseFunc{
-		"ask_user": func(ctx context.Context, in steerloop.PauseIn) (string, bool) {
-			var args struct {
-				Question string `json:"question"`
-			}
-			_ = json.Unmarshal([]byte(in.Arguments), &args)
-			in.Emit(steerloop.EventAwaitingInput, steerloop.AwaitingInputData{Question: args.Question})
-			return in.Block(ctx) // returns the next Inject
-		},
-	}
+	cfg := loop2.DefaultConfig()
+	cfg.Pauses = map[string]pause.Handler{"ask_user": askUser{}}
 
-	loop, err := steerloop.New(cfg, chatModel, []*schema.ToolInfo{askUser}, executor, nil)
+	loop, err := loop2.New(cfg, chatModel, []*schema.ToolInfo{askUserInfo}, noTools{}, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -57,11 +65,11 @@ func main() {
 	stdin := bufio.NewReader(os.Stdin)
 	for evt := range loop.Start(context.Background(), []*schema.Message{{Role: schema.User, Content: "Write a report."}}) {
 		switch data := evt.Data.(type) {
-		case steerloop.AwaitingInputData:
+		case event.AwaitingInputData:
 			fmt.Printf("%s\n> ", data.Question)
 			answer, _ := stdin.ReadString('\n')
 			loop.Inject(answer)
-		case steerloop.DoneData:
+		case event.DoneData:
 			fmt.Printf("%s: %s\n", data.Reason, data.FinalContent)
 		}
 	}
