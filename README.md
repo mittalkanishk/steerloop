@@ -4,7 +4,9 @@
 
 Every agentic CLI (Claude Code, Codex, Cursor's agent, aider) is the same thing: a loop that calls a model, runs the tool it asked for, feeds the result back and repeats. In the real tools that loop is buried under a hundred thousand lines of UI and telemetry. steerloop is the loop on its own: the permission prompt, Ctrl-C, typing while it works, the transcript file, the retry after a 529, each one a test you can read and thirty lines you can change. The model is an interface, so a JSON file can play it: every behaviour runs offline, in seconds, for free.
 
-![steerloop validating a tool manifest, running a loop that searches this repository, then replaying the recorded run](docs/demo/demo.gif)
+![A real Claude run in steerloop: the model searches the code, the permission gate stops make_dir, a message typed mid-run steers the next call, and the recorded run is replayed with no model](docs/demo/steer.gif)
+
+A real run with Claude Sonnet 5.5: the model searches the code, the harness asks before `make_dir` and the answer is no, a line typed while it works reaches the model's next call, and the recorded run is replayed without the model. To try steerloop with no API key, use a scripted model: `--model script:docs/demo/script.json`.
 
 It is the specimen for the video series *How Claude Code Works*. It is also a library: a controllable agent harness built on [CloudWeGo Eino](https://github.com/cloudwego/eino), with control over a run that is already in flight:
 
@@ -265,7 +267,7 @@ go test -race ./...                                    # no network, no API key
 go test ./cmd/steerloop -update                        # rewrite golden files
 STEERLOOP_LIVE=1 STEERLOOP_LIVE_MODEL=openai:<model> \
   go test ./cmd/steerloop -run TestCLISuite -testify.m LiveSmoke
-vhs docs/demo/demo.tape                                # re-record the demo GIF
+vhs docs/demo/steer.tape                               # re-record the demo GIF (needs ANTHROPIC_API_KEY)
 ```
 
 ## License

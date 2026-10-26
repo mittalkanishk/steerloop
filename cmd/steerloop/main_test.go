@@ -56,7 +56,6 @@ func (s *CLISuite) TestRun_ExitCodes() {
 func (s *CLISuite) TestRun_UsageErrors() {
 	cases := map[string][]string{
 		"--model is required":               {"run", "--user-prompt", "hi"},
-		"--stop-condition must be":          {"run", "--model", "script:x", "--stop-condition", "never", "--user-prompt", "hi"},
 		"--reflect must be":                 {"run", "--model", "script:x", "--reflect", "always", "--user-prompt", "hi"},
 		"--output must be":                  {"run", "--model", "script:x", "--output", "xml", "--user-prompt", "hi"},
 		"--max-iterations must be":          {"run", "--model", "script:x", "--max-iterations", "0", "--user-prompt", "hi"},
@@ -80,6 +79,8 @@ func (s *CLISuite) TestRun_UsageErrors() {
 		"no such file or directory":         {"replay", "--path", "/no/such/recording.jsonl"},
 		"--max-wait has no effect":          {"replay", "--path", "x.jsonl", "--speed", "0", "--max-wait", "1s"},
 	}
+	cases[`--stop-condition must be no-tool-finish, finish-tool or external-finish, not "never"`] =
+		[]string{"run", "--model", "script:x", "--stop-condition", "never", "--user-prompt", "hi"}
 	for want, args := range cases {
 		s.Run(want, func() {
 			res := s.run(args...)
@@ -98,6 +99,7 @@ func (s *CLISuite) TestHelpVersionAndToolsValidate() {
 	s.Equal(cli.ExitOK, res.code)
 	s.Contains(res.stderr, "-max-iterations")
 	s.Contains(res.stderr, "-user-prompt")
+	s.Contains(res.stderr, "when the loop ends: no-tool-finish, finish-tool or external-finish")
 
 	res = s.run("version")
 	s.Equal(cli.ExitOK, res.code)
