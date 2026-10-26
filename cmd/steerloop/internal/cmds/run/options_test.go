@@ -69,7 +69,7 @@ func TestValidateRejects(t *testing.T) {
 		{"negative iteration timeout", func(o *Options) { o.IterationTimeout = -time.Second }, "--iteration-timeout must not be negative"},
 		{"negative total timeout", func(o *Options) { o.TotalTimeout = -time.Second }, "--total-timeout must not be negative"},
 		{"iteration longer than total", func(o *Options) { o.IterationTimeout = time.Hour }, "--iteration-timeout (1h0m0s) must not exceed --total-timeout (10m0s)"},
-		{"unknown stop condition", func(o *Options) { o.StopCondition = "never" }, `--stop-condition must be no-tool-finish, finish-tool or explicit, not "never"`},
+		{"unknown stop condition", func(o *Options) { o.StopCondition = "never" }, `--stop-condition must be no-tool-finish, finish-tool or external-finish, not "never"`},
 		{"unknown reflect", func(o *Options) { o.Reflect = "always" }, `--reflect must be off, on-iteration or on-finish, not "always"`},
 		{"on-finish never runs", func(o *Options) { o.Reflect, o.StopCondition = "on-finish", "external-finish" }, "--reflect on-finish has no effect"},
 		{"skip-confirm without tools", func(o *Options) { o.AutoApprove = true }, "--skip-confirm has no effect without --tools"},

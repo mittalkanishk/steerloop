@@ -74,7 +74,7 @@ func ParseOptions(args []string, stderr io.Writer) (Options, error) {
 	flags.IntVar(&opts.MaxIterations, "max-iterations", 12, "cap on model calls")
 	flags.DurationVar(&opts.IterationTimeout, "iteration-timeout", time.Minute, "time allowed for one model call")
 	flags.DurationVar(&opts.TotalTimeout, "total-timeout", 10*time.Minute, "time allowed for the whole run")
-	flags.StringVar(&opts.StopCondition, "stop-condition", "no-tool-finish", "when the loop ends: no-tool-finish, finish-tool or explicit")
+	flags.StringVar(&opts.StopCondition, "stop-condition", "no-tool-finish", "when the loop ends: no-tool-finish, finish-tool or external-finish")
 	flags.StringVar(&opts.Reflect, "reflect", "off", "when to reflect: off, on-iteration or on-finish")
 	// Tool Flags
 	flags.StringVar(&opts.ToolsManifestPath, "tools", "", "path to a tool manifest (YAML)")
@@ -142,7 +142,7 @@ func (o Options) Validate() error {
 		fail("--iteration-timeout (%s) must not exceed --total-timeout (%s)", o.IterationTimeout, o.TotalTimeout)
 	}
 	if _, ok := stopConditions[o.StopCondition]; !ok {
-		fail("--stop-condition must be no-tool-finish, finish-tool or explicit, not %q", o.StopCondition)
+		fail("--stop-condition must be no-tool-finish, finish-tool or external-finish, not %q", o.StopCondition)
 	}
 	if _, ok := reflectConditions[o.Reflect]; !ok {
 		fail("--reflect must be off, on-iteration or on-finish, not %q", o.Reflect)

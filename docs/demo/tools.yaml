@@ -1,0 +1,33 @@
+# Tools for the steer.gif demo (docs/demo/steer.tape). Like examples/tools.yaml,
+# but the search is case-insensitive extended regex over Go and Markdown
+# sources (tests skipped), with short output, so a real model's searches land.
+tools:
+  - name: grep_repo
+    description: Search the Go and Markdown sources under the current directory for an extended regular expression, case-insensitively. Test files are skipped.
+    parameters:
+      type: object
+      properties:
+        pattern: { type: string, description: The extended regular expression. }
+      required: [pattern]
+    command: ["grep", "-rniE", "--include=*.go", "--include=*.md", "--exclude=*_test.go", "--", "{{.pattern}}", "."]
+    timeout: 20s
+    max_output_bytes: 2000
+
+  - name: count_lines
+    description: Count the lines of a file in the current directory.
+    parameters:
+      type: object
+      properties:
+        path: { type: string, description: File to count. }
+      required: [path]
+    command: ["wc", "-l", "--", "{{.path}}"]
+
+  - name: make_dir
+    description: Create a directory. Asks before it runs.
+    parameters:
+      type: object
+      properties:
+        path: { type: string }
+      required: [path]
+    command: ["mkdir", "-p", "--", "{{.path}}"]
+    confirm: true
