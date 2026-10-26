@@ -42,7 +42,10 @@ func (j Judge) Rule(ctx context.Context, brief string) (Verdict, error) {
 		{Role: schema.User, Content: brief},
 	}
 
-	reply, err := j.caller.Call(ctx, j.model, msgs, model.WithToolChoice(schema.ToolChoiceForced, VerdictTool))
+	// The tool choice is left to the model: review_verdict is the only tool
+	// bound and the prompt asks for it. Forcing it is rejected by some models
+	// (Claude 5.5 answers 400 to tool_choice "tool" and "any").
+	reply, err := j.caller.Call(ctx, j.model, msgs, model.WithToolChoice(schema.ToolChoiceAllowed))
 	if err != nil {
 		return Verdict{}, err
 	}
