@@ -8,7 +8,7 @@ require (
 	github.com/cloudwego/eino-ext/components/model/claude v0.1.26
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.13
 	github.com/eino-contrib/jsonschema v1.0.3
-	github.com/mattn/go-isatty v0.0.20
+	github.com/mattn/go-isatty v0.0.24
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/goleak v1.3.0
 	gopkg.in/yaml.v3 v3.0.1
