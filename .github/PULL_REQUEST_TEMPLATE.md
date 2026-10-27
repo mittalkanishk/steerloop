@@ -1,5 +1,3 @@
-<!-- Title: STLOOP-xxx: what changed -->
-
 # Pull Request Details
 
 STLOOP-xxx
