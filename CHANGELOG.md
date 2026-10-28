@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- New `steerloop chat`: a multi-turn session at the terminal. After each turn it prints a `❯ ` prompt between two faint rules, and the next line starts a new turn with the conversation kept. `--user-prompt` is optional. Ctrl-D, or Ctrl-C at the prompt, ends it. `steerloop run` is still one turn.
 - Breaking: `steerloop run` takes the prompt only from `--prompt <text>`, which is required. Words after the flags are a usage error, and stdin is no longer read as the prompt. Update `steerloop run ... "do it"` to `steerloop run ... --prompt "do it"`.
 
 ## v0.2.0

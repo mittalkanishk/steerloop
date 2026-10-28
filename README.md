@@ -166,6 +166,16 @@ While it runs, type to steer it:
 | `/stop` | graceful stop |
 | Ctrl-C | graceful stop; a second Ctrl-C aborts |
 
+A run is one turn. To keep talking, use `steerloop chat`.
+
+### `steerloop chat`
+
+```sh
+steerloop chat --model anthropic:<model> --tools examples/tools.yaml
+```
+
+`chat` is a session at the terminal. It takes the same flags as `run`, except `--output` and `--control-file`, and `--user-prompt` is optional: without it, chat starts at the prompt. The prompt is `❯ `, between two faint rules. Each line you type there starts a new turn in the same conversation, with the history kept, and while a turn runs you steer it as above. However a turn ends (an answer, `/stop`, Ctrl-C, max iterations, a timeout, an error), the prompt comes back. An empty line asks again. Ctrl-D ends the chat (exit 0); Ctrl-C at the prompt, or a second Ctrl-C during a turn, ends it with exit 130. One recording holds every turn. Without a terminal, `chat` refuses and points you to `run`.
+
 ### `steerloop run` flags
 
 | Flag | Default | |
@@ -255,7 +265,8 @@ A tool still runs with your permissions and environment. The manifest is the sec
 - The loop holds the conversation in memory. Persisting and resuming it is the caller's job; `l.Messages()` and the `llm_turn` events give you the data.
 - `HistoryCompactor` is a hook. No summarization strategy is included.
 - Token usage of reflection reviews is not yet counted in `DoneData.LLMUsage`.
-- The CLI runs one turn: there is no multi-turn terminal session, and `/stop` is the only slash command.
+- `/stop` is the only slash command.
+- A replay of a chat shows each turn's events, not the prompts typed at `❯ `.
 - The CLI's argument validation covers required names, unknown names, top-level types and enums, not the whole of JSON Schema.
 - The CLI supports Anthropic and OpenAI models. The library accepts any Eino chat model.
 - MCP servers are not supported as a tool source yet.

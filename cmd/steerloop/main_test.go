@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -244,6 +245,89 @@ func (s *CLISuite) TestRun_StopOnTerminal() {
 		[2]string{"? Which colour?", "/stop"})
 	s.Equal(cli.ExitStopped, res.code, res.stderr)
 	s.Contains(res.stderr, "● stopped")
+}
+
+// run on a terminal is one turn: steering while it runs, no prompt after.
+func (s *CLISuite) TestRun_IsOneTurnOnATerminal() {
+	scriptPath := s.writeFile("two.json", `{"steps":[{"content":"four"},{"content":"six"}]}`+"\n")
+	res := s.typing([]string{"run", "--model", "script:" + scriptPath, "--user-prompt", "2+2"})
+	s.Require().Equal(cli.ExitOK, res.code, res.stderr)
+	s.Equal("four\n", res.stdout)
+	s.NotContains(res.stderr, "❯ ")
+}
+
+// A finished answer prints "❯ ", and the next line starts a new turn in the
+// same conversation. An empty line asks again; end of input ends the chat.
+func (s *CLISuite) TestChat_ReadsTheNextPrompt() {
+	scriptPath := s.writeFile("two.json", `{"steps":[{"content":"four"},{"content":"six"}]}`+"\n")
+	res := s.typing([]string{"chat", "--debug", "--model", "script:" + scriptPath, "--user-prompt", "2+2"},
+		[2]string{"❯ ", ""},
+		[2]string{"❯ ❯ ", "3+3"},
+	)
+	s.Require().Equal(cli.ExitOK, res.code, res.stderr)
+	s.Equal("four\nsix\n", res.stdout)
+	s.Equal(2, strings.Count(res.stderr, "● finished"), "one done line per turn")
+	s.Regexp(`agent loop seed" seed=".*user 2\+2\\n.*assistant four\\n.*user 3\+3"`, res.stderr,
+		"the second turn starts from the first turn's conversation")
+}
+
+// Without --user-prompt, chat starts at the prompt.
+func (s *CLISuite) TestChat_StartsAtThePrompt() {
+	scriptPath := s.writeFile("one.json", `{"steps":[{"content":"four"}]}`+"\n")
+	res := s.typing([]string{"chat", "--model", "script:" + scriptPath},
+		[2]string{"❯ ", "2+2"},
+	)
+	s.Require().Equal(cli.ExitOK, res.code, res.stderr)
+	s.Equal("four\n", res.stdout)
+	s.Equal(1, strings.Count(res.stderr, "● finished"))
+}
+
+// A turn that ends without an answer goes back to the prompt, and the next
+// turn picks up the conversation.
+func (s *CLISuite) TestChat_UnfinishedTurnReturnsToThePrompt() {
+	scriptPath := s.writeFile("tool_then_six.json", `{"steps":[`+
+		`{"tool_calls":[{"id":"call_1","name":"say","arguments":{"message":"hi"}}]},`+
+		`{"content":"six"}]}`+"\n")
+	res := s.typing([]string{"chat", "--model", "script:" + scriptPath, "--tools", toolsYML,
+		"--max-iterations", "1", "--user-prompt", "go"},
+		[2]string{"❯ ", "go on"},
+	)
+	s.Require().Equal(cli.ExitOK, res.code, res.stderr)
+	s.Equal("six\n", res.stdout)
+	s.Equal(1, strings.Count(res.stderr, "● finished"), "only the second turn finishes")
+}
+
+// chat is for a person: without a terminal it refuses and points to run.
+func (s *CLISuite) TestChat_NeedsATerminal() {
+	scriptPath := s.writeFile("one.json", `{"steps":[{"content":"four"}]}`+"\n")
+	s.stdin = strings.NewReader("2+2\n")
+	res := s.run("chat", "--model", "script:"+scriptPath)
+	s.Equal(cli.ExitUsage, res.code)
+	s.Contains(res.stderr, "chat needs a terminal")
+	s.Empty(res.stdout)
+}
+
+// Ctrl-C at the "❯ " prompt ends the chat.
+func (s *CLISuite) TestChat_InterruptAtThePrompt() {
+	guard := make(chan os.Signal, 4)
+	signal.Notify(guard, os.Interrupt)
+	defer signal.Stop(guard)
+
+	pr, pw := io.Pipe()
+	defer pw.Close()
+	s.stdin, s.terminal = pr, true
+	scriptPath := s.writeFile("one.json", `{"steps":[{"content":"four"}]}`+"\n")
+	done := s.start("chat", "--model", "script:"+scriptPath, "--user-prompt", "2+2")
+
+	s.waitForStderr("❯ ")
+	s.Require().NoError(syscall.Kill(os.Getpid(), syscall.SIGINT))
+	select {
+	case res := <-done:
+		s.Equal(cli.ExitStopped, res.code, res.stderr)
+		s.Equal("four\n", res.stdout)
+	case <-time.After(15 * time.Second):
+		s.Require().FailNow("chat did not end after the interrupt")
+	}
 }
 
 // C6: a replay prints what the live run printed, without a model or a tool.

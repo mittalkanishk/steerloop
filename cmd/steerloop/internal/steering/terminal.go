@@ -2,7 +2,6 @@
 package steering
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -11,40 +10,43 @@ import (
 	"github.com/mittalkanishk/steerloop/loop"
 )
 
-// Terminal turns each line typed during the run into steering. "/stop" stops
+// Terminal turns each line typed during a turn into steering. "/stop" stops
 // the loop; anything else is injected as a user message, which is also how
 // an ask_user or confirm question (steerloop/internal/gates) gets its answer.
 type Terminal struct {
-	in     io.Reader
+	lines  <-chan string // from stdin.Lines; a chat shares them with the prompt between turns
 	stderr io.Writer
 }
 
-func NewTerminal(in io.Reader, stderr io.Writer) Terminal {
-	return Terminal{in: in, stderr: stderr}
+func NewTerminal(lines <-chan string, stderr io.Writer) Terminal {
+	return Terminal{lines: lines, stderr: stderr}
 }
 
-// Steer reads lines until stdin closes or ctx ends. Scan blocks on stdin, so
-// this goroutine can outlive the run; the process exits right after, so that
-// is harmless here.
+// Steer applies lines until ctx ends (run cancels it when the turn is over)
+// or input ends. Returning on ctx is what hands the lines that follow to the
+// prompt for the next turn.
 func (t Terminal) Steer(ctx context.Context, loop *loop.Loop) {
-	scanner := bufio.NewScanner(t.in)
-	for scanner.Scan() {
-		if ctx.Err() != nil {
+	for {
+		select {
+		case <-ctx.Done():
 			return
-		}
-		text := strings.TrimSpace(scanner.Text())
-		switch text {
-		case "":
-			continue
-		case "/stop":
-			loop.Stop()
-		default:
-			if !loop.Inject(text) {
-				fmt.Fprintln(t.stderr, "steerloop: control queue is full; input dropped")
+		case line, ok := <-t.lines:
+			if !ok {
+				return
 			}
+			t.apply(loop, strings.TrimSpace(line))
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		fmt.Fprintf(t.stderr, "steerloop: reading input: %v\n", err)
+}
+
+func (t Terminal) apply(loop *loop.Loop, text string) {
+	switch text {
+	case "":
+	case "/stop":
+		loop.Stop()
+	default:
+		if !loop.Inject(text) {
+			fmt.Fprintln(t.stderr, "steerloop: control queue is full; input dropped")
+		}
 	}
 }

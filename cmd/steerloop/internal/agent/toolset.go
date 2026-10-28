@@ -1,4 +1,4 @@
-package runcmd
+package agent
 
 import (
 	"fmt"
