@@ -171,6 +171,20 @@ steerloop run --model script:$T/nap.json --tools $T/tools.yaml --user-prompt hi 
 - Type `/stop` and Enter: stopped, exit 130.
 - Press Ctrl-C once: stops after the current iteration, exit 130. Twice: aborts at once.
 
+### A chat (terminal only)
+
+```sh
+echo '{"steps":[{"content":"four"},{"content":"six"}]}' > $R/two.json
+steerloop chat --model script:$R/two.json --output-record-path ""
+```
+
+- A faint rule and `❯ `. Press Enter on an empty line: `❯ ` again.
+- Type `2+2` and Enter: "four", then `❯ `.
+- Type `3+3` and Enter: a second turn, "six", then `❯ `. With `--debug`, the second "agent loop seed" holds `user 2+2`, `assistant four`, `user 3+3`.
+- Ctrl-D: exit 0. Ctrl-C at `❯ ` instead: exit 130.
+- `steerloop run` with the same flags plus `--user-prompt 2+2`: "four", and it exits; no `❯ `.
+- `echo hi | steerloop chat --model script:$R/two.json`: "chat needs a terminal", exit 2.
+
 ## 7. Approvals and questions
 
 A piped or redirected stdin counts as nobody there, so these first runs

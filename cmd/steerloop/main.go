@@ -1,12 +1,14 @@
-// Command steerloop runs an agent loop from the terminal: run, replay,
-// tools validate, version and help. It is built interface-first and nested:
-// each interface is declared in the file that uses it.
+// Command steerloop runs an agent loop from the terminal: run, chat,
+// replay, tools validate, version and help. It is built interface-first and
+// nested: each interface is declared in the file that uses it.
 //
 // Read in this order:
 //
-//	internal/cmds/run/run.go   what happens, and what it needs
-//	internal/cmds/run/wire.go  what fills each need
-//	then any package under internal/ that wire.go names
+//	internal/cmds/run/run.go    one turn: what happens, what it needs, and
+//	                            (NewRun) what fills each need
+//	internal/cmds/chat/chat.go  a session of turns at a terminal
+//	internal/bootstrap          what both share: flags, loops, tools, recording
+//	then any package under internal/ that NewRun or NewChat names
 package main
 
 import (
@@ -14,6 +16,7 @@ import (
 	"os"
 
 	"github.com/mittalkanishk/steerloop/cmd/steerloop/internal/cli"
+	chatcmd "github.com/mittalkanishk/steerloop/cmd/steerloop/internal/cmds/chat"
 	helpcmd "github.com/mittalkanishk/steerloop/cmd/steerloop/internal/cmds/help"
 	replaycmd "github.com/mittalkanishk/steerloop/cmd/steerloop/internal/cmds/replay"
 	runcmd "github.com/mittalkanishk/steerloop/cmd/steerloop/internal/cmds/run"
@@ -34,6 +37,7 @@ func newApp(env cli.Environment) *cli.App {
 
 	return cli.NewApp(env, map[string]cli.Command{
 		"run":       runcmd.New(env),
+		"chat":      chatcmd.New(env),
 		"replay":    replaycmd.New(env),
 		"tools":     toolsvalidatecmd.New(env),
 		"version":   version,

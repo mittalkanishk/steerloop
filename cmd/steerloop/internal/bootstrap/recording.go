@@ -1,4 +1,4 @@
-package runcmd
+package bootstrap
 
 import (
 	"fmt"
@@ -15,8 +15,8 @@ import (
 // says otherwise. A relative folder sits under the repo root.
 const defaultRecordDir = "run-recordings"
 
-// Recording is the JSONL file a run writes every event to, for
-// `steerloop replay`. It is an EventSink.
+// Recording is the JSONL file a run, or every turn of a chat, writes each
+// event to, for `steerloop replay`. It is an EventSink.
 type Recording struct {
 	file  *os.File
 	jsonl *eventlog.JSONL

@@ -88,11 +88,12 @@ func (s *CLISuite) run(args ...string) result {
 // test can read while it runs. The result arrives on the channel when the
 // command exits.
 //
-// `run` records to <repo>/run-recordings by default. A test run must not
-// write there, so recording is turned off unless the test sets its own path.
+// `run` and `chat` record to <repo>/run-recordings by default. A test run
+// must not write there, so recording is turned off unless the test sets its
+// own path.
 func (s *CLISuite) start(args ...string) <-chan result {
-	if len(args) > 0 && args[0] == "run" && !hasFlag(args, "output-record-path") {
-		args = append([]string{"run", "--output-record-path="}, args[1:]...)
+	if len(args) > 0 && (args[0] == "run" || args[0] == "chat") && !hasFlag(args, "output-record-path") {
+		args = append([]string{args[0], "--output-record-path="}, args[1:]...)
 	}
 
 	stdout, stderr := &syncBuffer{}, &syncBuffer{}

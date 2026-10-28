@@ -4,19 +4,18 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/mittalkanishk/steerloop/cmd/steerloop/internal/bootstrap"
 	"github.com/mittalkanishk/steerloop/cmd/steerloop/internal/cli"
 	"github.com/mittalkanishk/steerloop/cmd/steerloop/internal/interrupt"
 	"github.com/mittalkanishk/steerloop/cmd/steerloop/internal/render"
+	"github.com/mittalkanishk/steerloop/cmd/steerloop/internal/stdin"
 	"github.com/mittalkanishk/steerloop/cmd/steerloop/internal/steering"
 	"github.com/mittalkanishk/steerloop/internal/eventlog"
-	"github.com/mittalkanishk/steerloop/internal/provider"
 	"github.com/mittalkanishk/steerloop/loop"
 	"github.com/mittalkanishk/steerloop/loop/event"
 )
@@ -27,64 +26,51 @@ type EventSink interface {
 	Write(evt event.Event)
 }
 
+// InputReader reads stdin into the lines steering applies.
+// → cmd/steerloop/internal/stdin
+type InputReader interface {
+	Read(ctx context.Context)
+}
+
 // SteeringSource feeds a person's input into a running loop.
 // → cmd/steerloop/internal/steering
 type SteeringSource interface {
 	Steer(ctx context.Context, loop *loop.Loop)
 }
 
-// Run is one fully wired run, ready to execute. wire.go builds it.
+// Run is one fully wired run, ready to execute. NewRun builds it.
 type Run struct {
 	loop        *loop.Loop
 	messages    []*schema.Message
-	sinks       []EventSink // every event goes to each: the screen, then the recording if any
-	recording   *Recording  // nil: not recording
+	sinks       []EventSink          // every event goes to each: the screen, then the recording if any
+	recording   *bootstrap.Recording // nil: not recording
+	input       InputReader
 	steering    SteeringSource
 	controlFile *os.File // what steering reads with --control-file; nil without
 	interrupts  *interrupt.Watcher
 	stderr      io.Writer
 }
 
-// Wire builds a Run from options. It is the only place that picks a concrete
-// type for each interface run.go declares, so this function alone tells you
-// which implementation runs.
+// NewRun builds a Run from options. It is the only place that picks a
+// concrete type for each interface run.go declares, so this function alone
+// tells you which implementation runs.
 func NewRun(ctx context.Context, env cli.Environment, opts Options) (*Run, error) {
-
-	llm, err := provider.Build(ctx, opts.Model, provider.Options{Getenv: env.Getenv, MaxTokens: opts.MaxTokens})
-	if err != nil {
-		return nil, err
-	}
 
 	// Someone can answer an ask_user or confirm question: a person at the
 	// terminal, or a program writing inject lines to --control-file.
 	humanAvailable := env.StdinIsTerminal() || opts.ControlPath != ""
 
-	tools, err := NewToolset(opts, humanAvailable)
+	loops, err := bootstrap.NewLoops(ctx, env, opts.Options, humanAvailable)
 	if err != nil {
 		return nil, err
 	}
 
-	cfg := loop.DefaultConfig()
-	cfg.MaxIterations = opts.MaxIterations
-	cfg.Pauses = tools.Gates
-	cfg.StopCondition = stopConditions[opts.StopCondition] // basically a map of 3 accepted values.
-	cfg.Reflect = reflectConditions[opts.Reflect]
-	cfg.Temperature = opts.Temperature
-	cfg.IterationTimeout = opts.IterationTimeout
-	cfg.TotalTimeout = opts.TotalTimeout
-
-	// Logger: the loop's debug log on stderr with --debug; nil discards it.
-	var logger *slog.Logger
-	if opts.Debug {
-		logger = slog.New(slog.NewTextHandler(env.Stderr(), &slog.HandlerOptions{Level: slog.LevelDebug}))
-	}
-
-	loop, err := loop.New(cfg, llm.Chat, tools.Infos, tools.Executor, logger)
+	loop, err := loops.New()
 	if err != nil {
 		return nil, err
 	}
 
-	messages, err := initialMessages(opts)
+	messages, err := bootstrap.InitialMessages(opts.Options)
 	if err != nil {
 		return nil, err
 	}
@@ -94,11 +80,13 @@ func NewRun(ctx context.Context, env cli.Environment, opts Options) (*Run, error
 	if opts.Output == "jsonl" {
 		sink = eventlog.NewJSONL(env.Stdout())
 	} else {
-		sink = render.NewText(env.Stderr(), env.Stdout(), cfg.StopCondition)
+		sink = render.NewText(env.Stderr(), env.Stdout(), loops.StopCondition())
 	}
 
-	// SteeringSource: the --control-file when given, else the terminal when a
-	// person is there, nothing otherwise.
+	// InputReader and SteeringSource: the --control-file when given, else
+	// the lines typed at the terminal when a person is there, nothing
+	// otherwise.
+	var input InputReader = stdin.None{}
 	var steer SteeringSource = steering.None{}
 	var controlFile *os.File
 	switch {
@@ -108,16 +96,18 @@ func NewRun(ctx context.Context, env cli.Environment, opts Options) (*Run, error
 		}
 		steer = steering.NewControl(controlFile, env.Stderr())
 	case env.StdinIsTerminal():
-		steer = steering.NewTerminal(env.Stdin(), env.Stderr())
+		lines := stdin.NewLines(env.Stdin(), env.Stderr())
+		input = lines
+		steer = steering.NewTerminal(lines.C(), env.Stderr())
 	}
 
 	sinks := []EventSink{sink}
 
 	// Recording: a second sink, opened last so no earlier failure leaves an
 	// empty file behind. An empty --output-record-path turns it off.
-	var recording *Recording
+	var recording *bootstrap.Recording
 	if opts.OutputRecordPath != "" {
-		if recording, err = OpenRecording(opts.OutputRecordPath, time.Now()); err != nil {
+		if recording, err = bootstrap.OpenRecording(opts.OutputRecordPath, time.Now()); err != nil {
 			if controlFile != nil {
 				_ = controlFile.Close()
 			}
@@ -131,6 +121,7 @@ func NewRun(ctx context.Context, env cli.Environment, opts Options) (*Run, error
 		messages:    messages,
 		sinks:       sinks,
 		recording:   recording,
+		input:       input,
 		steering:    steer,
 		controlFile: controlFile,
 		interrupts:  interrupt.NewWatcher(env.Stderr()),
@@ -138,41 +129,15 @@ func NewRun(ctx context.Context, env cli.Environment, opts Options) (*Run, error
 	}, nil
 }
 
-// initialMessages is the conversation the run starts from: the --system-prompt
-// file, if any, then the user prompt.
-func initialMessages(opts Options) ([]*schema.Message, error) {
-	var messages []*schema.Message
-	if opts.SystemPromptPath != "" {
-		system, err := os.ReadFile(opts.SystemPromptPath)
-		if err != nil {
-			return nil, fmt.Errorf("read system prompt: %w", err)
-		}
-		if strings.TrimSpace(string(system)) == "" {
-			return nil, fmt.Errorf("system prompt file %s is empty", opts.SystemPromptPath)
-		}
-		messages = append(messages, &schema.Message{
-			Role:    schema.System,
-			Content: string(system),
-		})
-	}
-
-	// User Prompt is always added.
-	// So you get [system, user] with --system-prompt and [user] without it.
-	messages = append(messages, &schema.Message{
-		Role:    schema.User,
-		Content: strings.TrimSpace(opts.UserPrompt),
-	})
-
-	return messages, nil
-}
-
-// Execute runs one turn. Exactly three goroutines take part, all started here:
+// Execute runs one turn. Exactly four goroutines take part, all started here:
 //
-//  1. the loop itself     — loop.Start; it closes events when it is done
-//  2. steering input      — r.steering.Steer
-//  3. Ctrl-C handling     — r.interrupts.Watch
+//  1. the loop itself  — loop.Start; it closes events when it is done
+//  2. stdin lines      — r.input.Read; blocks on stdin, so it can outlive
+//     the run (the process exits right after, so that is harmless)
+//  3. steering input   — r.steering.Steer
+//  4. Ctrl-C handling  — r.interrupts.Watch
 //
-// cancel (deferred) ends 2 and 3 once the loop has finished.
+// cancel (deferred) ends 3 and 4 once the loop has finished.
 func (r *Run) Execute(parent context.Context) int {
 
 	ctx, cancel := context.WithCancel(parent)
@@ -181,15 +146,18 @@ func (r *Run) Execute(parent context.Context) int {
 
 	defer r.closeRecording()
 
-	// Closing the control file ends goroutine 2 when it is blocked reading a
+	// Closing the control file ends goroutine 3 when it is blocked reading a
 	// FIFO that nobody writes to any more.
 	defer r.closeControl()
 
 	events := r.loop.Start(ctx, r.messages)
 
+	go r.input.Read(ctx)
+
 	go r.steering.Steer(ctx, r.loop)
 
-	go r.interrupts.Watch(ctx, cancel, r.loop)
+	r.interrupts.Track(r.loop)
+	go r.interrupts.Watch(ctx, cancel)
 
 	// Ends when the loop closes the channel after its final Done event.
 	for evt := range events {

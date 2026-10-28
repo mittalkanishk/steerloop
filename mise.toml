@@ -1,6 +1,7 @@
 [tools]
 go = "1.26"
 golangci-lint = "2.9.0"
+mockery = "3.8.1"
 
 [env]
 # Build this module on its own even when a parent directory has a go.work.
