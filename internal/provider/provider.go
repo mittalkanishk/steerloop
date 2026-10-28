@@ -11,7 +11,7 @@ import (
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/components/model"
 
-	"github.com/mittalkanishk/steerloop/steerlooptest"
+	"github.com/mittalkanishk/steerloop/internal/mockllm/scripts"
 )
 
 // Model is a chat model with the names used to label it in events.
@@ -47,11 +47,11 @@ func Build(ctx context.Context, spec string, opts Options) (*Model, error) {
 
 	switch kind {
 	case "script":
-		steps, err := steerlooptest.LoadScript(name)
+		steps, err := scripts.LoadScript(name)
 		if err != nil {
 			return nil, err
 		}
-		return &Model{Chat: steerlooptest.NewScriptedModel(steps...), Provider: "script", Name: filepath.Base(name)}, nil
+		return &Model{Chat: scripts.NewScriptedModel(steps...), Provider: "script", Name: filepath.Base(name)}, nil
 
 	case "anthropic":
 		key := opts.Getenv("ANTHROPIC_API_KEY")

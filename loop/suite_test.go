@@ -16,10 +16,11 @@ import (
 	"github.com/stretchr/testify/suite"
 	"go.uber.org/goleak"
 
+	"github.com/mittalkanishk/steerloop/internal/mockllm/scripts"
 	"github.com/mittalkanishk/steerloop/loop"
+	mocks "github.com/mittalkanishk/steerloop/loop/_mocks"
 	"github.com/mittalkanishk/steerloop/loop/event"
 	"github.com/mittalkanishk/steerloop/loop/pause"
-	"github.com/mittalkanishk/steerloop/steerlooptest"
 )
 
 // This file is the whole loop test suite. LoopSuite drives package loop
@@ -47,7 +48,7 @@ type LoopSuite struct {
 	cfg loop.Config
 	// exec runs the tools. It answers "result from <tool>" until a test
 	// replaces it with an executor that answers differently.
-	exec *steerlooptest.RecordingExecutor
+	exec *mocks.ToolExecutor
 	// logs receives every line the loop logs.
 	logs *captureHandler
 }
@@ -69,7 +70,7 @@ func (s *LoopSuite) SetupTest() {
 		StreamEvents:     true,
 		DisableStreaming: true,
 	}
-	s.exec = steerlooptest.NewRecordingExecutor(nil)
+	s.exec = toolsAnswer(s.T(), resultFrom)
 	s.logs = &captureHandler{level: slog.LevelInfo}
 }
 
@@ -78,7 +79,7 @@ func (s *LoopSuite) SetupTest() {
 // =============================================================================
 
 func (s *LoopSuite) TestNew_RejectsAMissingModelOrExecutor() {
-	llm := steerlooptest.NewScriptedModel(says("x"))
+	llm := scripts.NewScriptedModel(says("x"))
 
 	_, err := loop.New(s.cfg, llm, nil, nil, nil)
 	s.ErrorContains(err, "tool executor")
@@ -96,7 +97,7 @@ func (s *LoopSuite) TestNew_ReportsAToolBindingFailure() {
 }
 
 func (s *LoopSuite) TestNew_BindsTheToolsToTheModel() {
-	llm := steerlooptest.NewScriptedModel(says("x"))
+	llm := scripts.NewScriptedModel(says("x"))
 
 	loop, err := loop.New(s.cfg, llm, s.sampleTools(), s.exec, nil) // a nil logger is allowed
 	s.Require().NoError(err)
@@ -147,7 +148,7 @@ func (s *LoopSuite) TestConfig_CallOptionsReplaceTheDefaultOptions() {
 
 func (s *LoopSuite) TestConfig_HistoryCompactorShapesOnlyWhatTheModelSees() {
 	s.cfg.HistoryCompactor = keepNewest{}
-	llm := steerlooptest.NewScriptedModel(asksFor(profileCall()), says("answer"))
+	llm := scripts.NewScriptedModel(asksFor(profileCall()), says("answer"))
 	loop := s.newLoop(llm)
 	s.run(loop)
 
@@ -166,7 +167,7 @@ func (s *LoopSuite) TestConfig_HistoryCompactorShapesOnlyWhatTheModelSees() {
 func (s *LoopSuite) TestStart_LeavesTheCallerMessagesUntouched() {
 	seed := seedConversation()
 	first := seed[0]
-	loop := s.newLoop(steerlooptest.NewScriptedModel(says("Hello there!")))
+	loop := s.newLoop(scripts.NewScriptedModel(says("Hello there!")))
 
 	s.collect(loop.Start(context.Background(), seed))
 
@@ -183,7 +184,7 @@ func (s *LoopSuite) TestStart_LeavesTheCallerMessagesUntouched() {
 }
 
 func (s *LoopSuite) TestStart_ASecondCallFailsWithoutDisturbingTheRun() {
-	loop := s.newLoop(steerlooptest.NewScriptedModel(says("hello")))
+	loop := s.newLoop(scripts.NewScriptedModel(says("hello")))
 	first := loop.Start(context.Background(), seedConversation())
 	second := loop.Start(context.Background(), seedConversation())
 	s.NotEqual(first, second, "the second call gets its own channel")
@@ -196,7 +197,7 @@ func (s *LoopSuite) TestStart_ASecondCallFailsWithoutDisturbingTheRun() {
 }
 
 func (s *LoopSuite) TestWait_ReturnsOnceTheRunHasEnded() {
-	l := s.newLoop(steerlooptest.NewScriptedModel(steerlooptest.Step{Content: "done", Delay: 50 * time.Millisecond}))
+	l := s.newLoop(scripts.NewScriptedModel(scripts.Step{Content: "done", Delay: 50 * time.Millisecond}))
 	events := l.Start(context.Background(), seedConversation())
 	go func() {
 		for range events { // a reader elsewhere drains the channel
@@ -238,7 +239,7 @@ func (s *LoopSuite) TestResult_IsAvailableOnlyAfterTheRunEnds() {
 func (s *LoopSuite) TestState_AccessorsAreSafeForConcurrentUse() {
 	s.cfg.StopCondition = loop.StopOnExternal
 	s.cfg.MaxIterations = 5
-	loop := s.newLoop(steerlooptest.NewScriptedModel(steerlooptest.Step{Content: "response", Delay: 5 * time.Millisecond}))
+	loop := s.newLoop(scripts.NewScriptedModel(scripts.Step{Content: "response", Delay: 5 * time.Millisecond}))
 	events := loop.Start(context.Background(), seedConversation())
 
 	var readers sync.WaitGroup
@@ -261,7 +262,7 @@ func (s *LoopSuite) TestState_AccessorsAreSafeForConcurrentUse() {
 // =============================================================================
 
 func (s *LoopSuite) TestRun_ATextReplyEndsTheRun() {
-	l := s.newLoop(steerlooptest.NewScriptedModel(says("Hello there!")))
+	l := s.newLoop(scripts.NewScriptedModel(says("Hello there!")))
 	events := s.run(l)
 
 	s.NotEmpty(payloads[event.ThinkingData](events))
@@ -270,19 +271,19 @@ func (s *LoopSuite) TestRun_ATextReplyEndsTheRun() {
 	s.Equal(event.ReasonFinished, done.Reason)
 	s.Equal(1, done.Iterations)
 	s.Equal("Hello there!", done.FinalContent)
-	s.Zero(s.exec.CallCount())
+	s.Empty(calledTools(s.exec))
 	s.Equal(loop.StateDone, l.State())
 }
 
 func (s *LoopSuite) TestRun_FeedsTheToolResultBackToTheModel() {
-	s.exec = steerlooptest.NewRecordingExecutor(func(context.Context, string, string) (string, error) {
+	s.exec = toolsAnswer(s.T(), func(context.Context, string, string) (string, error) {
 		return `{"level":"intermediate"}`, nil
 	})
 	events, llm := s.runScript(asksFor(profileCall()), says("Based on your profile, here is a lesson."))
 
 	s.Equal(profileTool, payload[event.ToolCallData](s, events).Name)
 	s.Contains(payload[event.ToolResultData](s, events).Result, "intermediate")
-	s.Equal([]string{profileTool}, s.exec.CalledTools())
+	s.Equal([]string{profileTool}, calledTools(s.exec))
 
 	s.Equal(2, llm.CallCount())
 	result := lastMessage(llm)
@@ -298,18 +299,18 @@ func (s *LoopSuite) TestRun_FeedsTheToolResultBackToTheModel() {
 
 func (s *LoopSuite) TestRun_ExecutesEveryToolCallOfATurn() {
 	events, _ := s.runScript(
-		asksFor(profileCall(), steerlooptest.ToolCall("call_2", searchTool, `{"query":"go concurrency"}`)),
+		asksFor(profileCall(), scripts.ToolCall("call_2", searchTool, `{"query":"go concurrency"}`)),
 		says("Here is your lesson on Go concurrency."),
 	)
 
 	s.Len(payloads[event.ToolCallData](events), 2)
 	s.Len(payloads[event.ToolResultData](events), 2)
-	s.Equal([]string{profileTool, searchTool}, s.exec.CalledTools())
+	s.Equal([]string{profileTool, searchTool}, calledTools(s.exec))
 	s.Equal(2, s.done(events).Iterations)
 }
 
 func (s *LoopSuite) TestRun_AToolErrorIsReturnedToTheModel() {
-	s.exec = steerlooptest.NewRecordingExecutor(func(context.Context, string, string) (string, error) {
+	s.exec = toolsAnswer(s.T(), func(context.Context, string, string) (string, error) {
 		return "", errors.New("database connection failed")
 	})
 	events, llm := s.runScript(asksFor(profileCall()), says("I couldn't read your profile."))
@@ -320,7 +321,7 @@ func (s *LoopSuite) TestRun_AToolErrorIsReturnedToTheModel() {
 }
 
 func (s *LoopSuite) TestRun_AToolPanicBecomesAToolError() {
-	s.exec = steerlooptest.NewRecordingExecutor(func(context.Context, string, string) (string, error) {
+	s.exec = toolsAnswer(s.T(), func(context.Context, string, string) (string, error) {
 		panic("boom")
 	})
 	events, _ := s.runScript(asksFor(profileCall()), says("recovered"))
@@ -344,7 +345,7 @@ func (s *LoopSuite) TestRun_TheFinishToolEndsTheRunWithItsArguments() {
 	s.Equal(event.ReasonFinished, done.Reason)
 	s.Equal(finishArgs, done.FinalContent)
 	s.Equal(2, done.Iterations)
-	s.Equal([]string{profileTool}, s.exec.CalledTools(), "finish never reaches the executor")
+	s.Equal([]string{profileTool}, calledTools(s.exec), "finish never reaches the executor")
 }
 
 func (s *LoopSuite) TestRun_ATextReplyInFinishToolModeIsNudged() {
@@ -376,7 +377,7 @@ func (s *LoopSuite) TestRun_StopsAtMaxIterations() {
 	done := s.done(events)
 	s.Equal(event.ReasonMaxIterations, done.Reason)
 	s.Equal(3, done.Iterations)
-	s.Equal(3, s.exec.CallCount())
+	s.Len(calledTools(s.exec), 3)
 }
 
 // A run that hits a limit returns its last text reply as its best answer.
@@ -442,7 +443,7 @@ func (s *LoopSuite) TestTimeout_TotalTimeoutReachesAModelCallInFlight() {
 			s.cfg.DisableIterationTimeoutDecoupling = tc.disable
 			start := time.Now()
 
-			events, _ := s.runScript(steerlooptest.Step{Content: "slow", Delay: 3 * time.Second})
+			events, _ := s.runScript(scripts.Step{Content: "slow", Delay: 3 * time.Second})
 
 			done := s.done(events)
 			s.Equal(event.ReasonError, done.Reason)
@@ -455,7 +456,7 @@ func (s *LoopSuite) TestTimeout_TotalTimeoutReachesAModelCallInFlight() {
 func (s *LoopSuite) TestTimeout_IterationTimeoutFailsTheRunOnceRetriesAreSpent() {
 	s.cfg.IterationTimeout = 50 * time.Millisecond
 	s.cfg.TotalTimeout = 2 * time.Second
-	events, llm := s.runScript(steerlooptest.Step{Content: "slow", Delay: 500 * time.Millisecond})
+	events, llm := s.runScript(scripts.Step{Content: "slow", Delay: 500 * time.Millisecond})
 
 	failure := payload[event.ErrorData](s, events)
 	s.True(failure.Fatal)
@@ -466,7 +467,7 @@ func (s *LoopSuite) TestTimeout_IterationTimeoutFailsTheRunOnceRetriesAreSpent()
 
 func (s *LoopSuite) TestTimeout_ZeroIterationTimeoutMeansNoBound() {
 	s.cfg.IterationTimeout = 0
-	events, _ := s.runScript(steerlooptest.Step{Content: "ok", Delay: 50 * time.Millisecond})
+	events, _ := s.runScript(scripts.Step{Content: "ok", Delay: 50 * time.Millisecond})
 	s.Equal("ok", s.done(events).FinalContent)
 }
 
@@ -502,7 +503,7 @@ func (s *LoopSuite) TestStopPolicy_CustomInstructionsReplaceTheBuiltIn() {
 // Providers such as Anthropic accept system messages only before the first
 // user message, so the instructions go after every system message.
 func (s *LoopSuite) TestStopPolicy_InstructionsGoAfterEverySystemMessage() {
-	llm := steerlooptest.NewScriptedModel(says("hi"))
+	llm := scripts.NewScriptedModel(says("hi"))
 	loop := s.newLoop(llm)
 	s.collect(loop.Start(context.Background(), []*schema.Message{
 		{Role: schema.System, Content: "one"},
@@ -522,11 +523,11 @@ func (s *LoopSuite) TestStopPolicy_InstructionsGoAfterEverySystemMessage() {
 // A conversation carried over from an earlier run already holds the
 // instructions, so a resumed run does not add them again.
 func (s *LoopSuite) TestStopPolicy_AResumedConversationIsNotSeededTwice() {
-	first := s.newLoop(steerlooptest.NewScriptedModel(says("hi")))
+	first := s.newLoop(scripts.NewScriptedModel(says("hi")))
 	s.run(first)
 	history := append(first.Messages(), &schema.Message{Role: schema.User, Content: "And again"})
 
-	llm := steerlooptest.NewScriptedModel(says("again"))
+	llm := scripts.NewScriptedModel(says("again"))
 	s.collect(s.newLoop(llm).Start(context.Background(), history))
 
 	seeded := 0
@@ -554,7 +555,7 @@ func (s *LoopSuite) TestStopPolicy_FinishToolNeverReachesTheExecutor() {
 
 	s.Equal(`{"result":"done"}`, s.done(events).FinalContent)
 	s.Equal(loop.FinishToolName, payload[event.ToolCallData](s, events).Name, "the finish call is still reported")
-	s.Zero(s.exec.CallCount(), "the loop recognises finish by name; it is not a tool to run")
+	s.Empty(calledTools(s.exec), "the loop recognises finish by name; it is not a tool to run")
 }
 
 func (s *LoopSuite) TestStopPolicy_ExternalFinishIgnoresTextAndFinishCalls() {
@@ -566,7 +567,7 @@ func (s *LoopSuite) TestStopPolicy_ExternalFinishIgnoresTextAndFinishCalls() {
 	s.Equal(event.ReasonMaxIterations, done.Reason, "only a limit or a stop ends the run")
 	s.Equal(3, done.Iterations)
 	s.Equal("still waiting", done.FinalContent, "a limit-ended run returns its last reply")
-	s.Equal([]string{loop.FinishToolName}, s.exec.CalledTools(), "finish is an ordinary tool here")
+	s.Equal([]string{loop.FinishToolName}, calledTools(s.exec), "finish is an ordinary tool here")
 }
 
 func (s *LoopSuite) TestStopPolicy_ExternalFinishEndsOnStop() {
@@ -635,14 +636,14 @@ func (s *LoopSuite) TestStop_CannotBeLostWhenTheControlQueueIsFull() {
 }
 
 func (s *LoopSuite) TestStop_IsIdempotent() {
-	loop := s.newLoop(steerlooptest.NewScriptedModel(says("x")))
+	loop := s.newLoop(scripts.NewScriptedModel(says("x")))
 	loop.Stop()
 	loop.Stop()
 	s.NotNil(loop.Events())
 }
 
 func (s *LoopSuite) TestControl_AFullQueueRejectsNewSignals() {
-	l := s.newLoop(steerlooptest.NewScriptedModel(says("x")))
+	l := s.newLoop(scripts.NewScriptedModel(says("x")))
 	for range controlQueueSize {
 		s.Require().True(l.Inject("m"))
 	}
@@ -769,7 +770,7 @@ func (s *LoopSuite) TestPause_TheReplyBecomesTheToolResult() {
 	events := s.run(loop)
 
 	s.Equal(event.ReasonFinished, s.done(events).Reason)
-	s.Zero(s.exec.CallCount(), "a pause tool never reaches the executor")
+	s.Empty(calledTools(s.exec), "a pause tool never reaches the executor")
 	s.Equal("call_1", seenCall.ID)
 	s.Equal(askUserTool, seenCall.Name)
 	s.JSONEq(`{"question":"colour?"}`, seenCall.Arguments)
@@ -902,7 +903,7 @@ func (s *LoopSuite) TestPause_CanRunToolsAndCallTheModel() {
 	s.run(loop)
 
 	s.Equal("result from lookup", toolOut)
-	s.Equal([]string{"lookup"}, s.exec.CalledTools())
+	s.Equal([]string{"lookup"}, calledTools(s.exec))
 	s.Equal("thanks", modelOut, "CallModel plays the next scripted reply")
 	s.Require().Len(llm.BoundTools(), 1)
 	s.Equal("lookup", llm.BoundTools()[0][0].Name)
@@ -926,13 +927,13 @@ func (s *LoopSuite) TestPause_OtherToolsStillReachTheExecutor() {
 	events, _ := s.runScript(
 		asksFor(
 			profileCall(),
-			steerlooptest.ToolCall("call_2", askUserTool, `{}`),
-			steerlooptest.ToolCall("call_3", searchTool, `{"query":"x"}`),
+			scripts.ToolCall("call_2", askUserTool, `{}`),
+			scripts.ToolCall("call_3", searchTool, `{"query":"x"}`),
 		),
 		says("ok"),
 	)
 
-	s.Equal([]string{profileTool, searchTool}, s.exec.CalledTools())
+	s.Equal([]string{profileTool, searchTool}, calledTools(s.exec))
 	s.Len(payloads[event.ToolResultData](events), 3)
 }
 
@@ -990,7 +991,7 @@ func (s *LoopSuite) TestEvents_AnUnreadLoopDropsAndCountsThem() {
 	s.cfg.MaxIterations = 20 // 40 intermediate events
 	s.cfg.EventBuffer = 8
 	s.cfg.DoneDeliveryGrace = 30 * time.Millisecond
-	loop := s.newLoop(steerlooptest.NewScriptedModel(says("tick")))
+	loop := s.newLoop(scripts.NewScriptedModel(says("tick")))
 	loop.Start(context.Background(), seedConversation())
 	loop.Wait()
 
@@ -1005,7 +1006,7 @@ func (s *LoopSuite) TestEvents_AnUnreadLoopDropsAndCountsThem() {
 func (s *LoopSuite) TestEvents_DoneReachesAReaderThatStartsLate() {
 	s.cfg.StopCondition = loop.StopOnExternal
 	s.cfg.MaxIterations = 80 // 160 intermediate events against a 64-slot channel
-	loop := s.newLoop(steerlooptest.NewScriptedModel(says("still working")))
+	loop := s.newLoop(scripts.NewScriptedModel(says("still working")))
 	events := loop.Start(context.Background(), seedConversation())
 	time.Sleep(300 * time.Millisecond) // the loop has filled the channel by now
 
@@ -1036,7 +1037,7 @@ func (s *LoopSuite) TestRetry_AllowsOneRetryByDefault() {
 }
 
 func (s *LoopSuite) TestRetry_ANonTransientErrorIsFatalAtOnce() {
-	llm := steerlooptest.NewScriptedModel(fails(errors.New("invalid api key")))
+	llm := scripts.NewScriptedModel(fails(errors.New("invalid api key")))
 	l := s.newLoop(llm)
 	events := s.run(l)
 
@@ -1065,14 +1066,14 @@ func (s *LoopSuite) TestRetry_HonoursTheConfiguredAttempts() {
 }
 
 func (s *LoopSuite) TestRetry_AnEmptyReplyIsRetried() {
-	events, llm := s.runScript(steerlooptest.Step{}, says("now with text"))
+	events, llm := s.runScript(scripts.Step{}, says("now with text"))
 
 	s.Equal("now with text", s.done(events).FinalContent)
 	s.Equal(2, llm.CallCount())
 }
 
 func (s *LoopSuite) TestRetry_APersistentlyEmptyReplyIsFatal() {
-	events, llm := s.runScript(steerlooptest.Step{}) // the empty step repeats
+	events, llm := s.runScript(scripts.Step{}) // the empty step repeats
 
 	failure := payload[event.ErrorData](s, events)
 	s.True(failure.Fatal)
@@ -1095,7 +1096,7 @@ func (s *LoopSuite) TestRetry_ACustomClassifierReplacesTheDefault() {
 func (s *LoopSuite) TestRetry_AnIterationTimeoutIsRetried() {
 	s.cfg.IterationTimeout = 40 * time.Millisecond
 	events, llm := s.runScript(
-		steerlooptest.Step{Content: "too slow", Delay: 500 * time.Millisecond},
+		scripts.Step{Content: "too slow", Delay: 500 * time.Millisecond},
 		says("fast"),
 	)
 
@@ -1146,8 +1147,8 @@ func (s *LoopSuite) TestRetry_TheDefaultClassifierKnowsTransientFailures() {
 
 func (s *LoopSuite) TestStream_ChunksAreJoinedIntoOneReply() {
 	s.cfg.DisableStreaming = false
-	events, _ := s.runScript(steerlooptest.Step{
-		Chunks: []steerlooptest.Chunk{{Content: "Hel"}, {Content: "lo "}, {Content: "there"}},
+	events, _ := s.runScript(scripts.Step{
+		Chunks: []scripts.Chunk{{Content: "Hel"}, {Content: "lo "}, {Content: "there"}},
 	})
 	s.Equal("Hello there", s.done(events).FinalContent)
 }
@@ -1155,23 +1156,23 @@ func (s *LoopSuite) TestStream_ChunksAreJoinedIntoOneReply() {
 func (s *LoopSuite) TestStream_ToolCallsArriveOnTheLastChunk() {
 	s.cfg.DisableStreaming = false
 	events, _ := s.runScript(
-		steerlooptest.Step{
-			Chunks:    []steerlooptest.Chunk{{Content: ""}, {Content: ""}},
+		scripts.Step{
+			Chunks:    []scripts.Chunk{{Content: ""}, {Content: ""}},
 			ToolCalls: []schema.ToolCall{profileCall()},
 		},
 		says("used the tool"),
 	)
 
 	s.Equal("used the tool", s.done(events).FinalContent)
-	s.Equal([]string{profileTool}, s.exec.CalledTools())
+	s.Equal([]string{profileTool}, calledTools(s.exec))
 }
 
 func (s *LoopSuite) TestStream_TheIdleWatchdogAbortsAStalledStream() {
 	s.cfg.DisableStreaming = false
 	s.cfg.IdleChunkTimeout = 40 * time.Millisecond
 	s.cfg.RetryMaxAttempts = -1
-	events, _ := s.runScript(steerlooptest.Step{
-		Chunks: []steerlooptest.Chunk{{Content: "start"}, {Content: "never", Delay: 2 * time.Second}},
+	events, _ := s.runScript(scripts.Step{
+		Chunks: []scripts.Chunk{{Content: "start"}, {Content: "never", Delay: 2 * time.Second}},
 	})
 
 	done := s.done(events)
@@ -1182,8 +1183,8 @@ func (s *LoopSuite) TestStream_TheIdleWatchdogAbortsAStalledStream() {
 func (s *LoopSuite) TestStream_TheIdleWatchdogWaitsForTheFirstChunk() {
 	s.cfg.DisableStreaming = false
 	s.cfg.IdleChunkTimeout = 40 * time.Millisecond
-	events, llm := s.runScript(steerlooptest.Step{
-		Chunks: []steerlooptest.Chunk{{Content: "late but fine", Delay: 200 * time.Millisecond}},
+	events, llm := s.runScript(scripts.Step{
+		Chunks: []scripts.Chunk{{Content: "late but fine", Delay: 200 * time.Millisecond}},
 	})
 
 	s.Equal("late but fine", s.done(events).FinalContent)
@@ -1194,7 +1195,7 @@ func (s *LoopSuite) TestStream_AStalledStreamIsRetried() {
 	s.cfg.DisableStreaming = false
 	s.cfg.IdleChunkTimeout = 40 * time.Millisecond
 	events, llm := s.runScript(
-		steerlooptest.Step{Chunks: []steerlooptest.Chunk{{Content: "a"}, {Content: "b", Delay: 2 * time.Second}}},
+		scripts.Step{Chunks: []scripts.Chunk{{Content: "a"}, {Content: "b", Delay: 2 * time.Second}}},
 		says("second attempt"),
 	)
 
@@ -1210,7 +1211,7 @@ func (s *LoopSuite) TestStream_AnErrorOpeningTheStreamIsReported() {
 }
 
 func (s *LoopSuite) TestStream_DisableStreamingSwitchesToGenerate() {
-	llm := &countingModel{inner: steerlooptest.NewScriptedModel(says("hi"))}
+	llm := &countingModel{inner: scripts.NewScriptedModel(says("hi"))}
 	for _, disable := range []bool{true, false} {
 		s.cfg.DisableStreaming = disable
 		s.run(s.newLoop(llm))
@@ -1280,7 +1281,7 @@ func (s *LoopSuite) TestReflection_TheNudgeAndTheReviewArriveAsOneMessage() {
 func (s *LoopSuite) TestReflection_TheJudgeSeesOnlyTheLatestIterationClipped() {
 	s.cfg.Reflect = loop.ReflectOnIteration
 	long := strings.Repeat("x", 2500)
-	s.exec = steerlooptest.NewRecordingExecutor(func(_ context.Context, name, _ string) (string, error) {
+	s.exec = toolsAnswer(s.T(), func(_ context.Context, name, _ string) (string, error) {
 		if name == searchTool {
 			return long, nil
 		}
@@ -1288,7 +1289,7 @@ func (s *LoopSuite) TestReflection_TheJudgeSeesOnlyTheLatestIterationClipped() {
 	})
 	_, llm := s.runScript(
 		asksFor(profileCall()), passes(),
-		asksFor(steerlooptest.ToolCall("call_2", searchTool, `{"query":"go"}`)), passes(),
+		asksFor(scripts.ToolCall("call_2", searchTool, `{"query":"go"}`)), passes(),
 		says("done"),
 	)
 
@@ -1312,7 +1313,7 @@ func (s *LoopSuite) TestReflection_ReviewsDoNotCountTowardMaxIterations() {
 
 func (s *LoopSuite) TestReflection_AFailedIterationReviewIsReportedAndSkipped() {
 	s.cfg.Reflect = loop.ReflectOnIteration
-	for name, judge := range map[string]steerlooptest.Step{
+	for name, judge := range map[string]scripts.Step{
 		"judge down": fails(errors.New("judge down")),
 		"no verdict": says("looks fine to me"),
 	} {
@@ -1330,7 +1331,7 @@ func (s *LoopSuite) TestReflection_AFailedIterationReviewIsReportedAndSkipped() 
 
 func (s *LoopSuite) TestReflection_OnFinishPassKeepsTheAnswer() {
 	s.cfg.Reflect = loop.ReflectOnFinish
-	llm := steerlooptest.NewScriptedModel(says("the answer"), passes())
+	llm := scripts.NewScriptedModel(says("the answer"), passes())
 	events := s.run(s.newLoop(llm, s.sampleTools()...))
 
 	s.Equal("the answer", s.done(events).FinalContent)
@@ -1436,7 +1437,7 @@ func (s *LoopSuite) TestReflection_JudgeTokensCountTowardUsage() {
 	usage := &schema.TokenUsage{PromptTokens: 10, CompletionTokens: 5, TotalTokens: 15}
 	verdict := passes()
 	verdict.Usage = usage
-	events, _ := s.runScript(steerlooptest.Step{Content: "answer", Usage: usage}, verdict)
+	events, _ := s.runScript(scripts.Step{Content: "answer", Usage: usage}, verdict)
 	s.Equal(30, s.done(events).LLMUsage.TotalTokens)
 }
 
@@ -1450,7 +1451,7 @@ func (s *LoopSuite) TestReflection_JudgeTokensCountTowardUsage() {
 // =============================================================================
 
 func (s *LoopSuite) TestAudit_TheLLMTurnEventCarriesUsageIdentityAndCost() {
-	steps := []steerlooptest.Step{
+	steps := []scripts.Step{
 		{ToolCalls: []schema.ToolCall{profileCall()}, Usage: &schema.TokenUsage{PromptTokens: 100, CompletionTokens: 20}},
 		{Content: "answer", Usage: &schema.TokenUsage{PromptTokens: 150, CompletionTokens: 30}},
 	}
@@ -1500,7 +1501,7 @@ func (s *LoopSuite) TestAudit_EachStopConditionHasAStableLabel() {
 }
 
 func (s *LoopSuite) TestUsage_CountsProvidersThatReportOnlyATotal() {
-	events, _ := s.runScript(steerlooptest.Step{Content: "hi", Usage: &schema.TokenUsage{TotalTokens: 42}})
+	events, _ := s.runScript(scripts.Step{Content: "hi", Usage: &schema.TokenUsage{TotalTokens: 42}})
 	s.Equal(event.LLMUsageSummary{TotalTokens: 42}, s.done(events).LLMUsage)
 }
 

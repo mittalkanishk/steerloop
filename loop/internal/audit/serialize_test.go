@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mittalkanishk/steerloop/steerlooptest"
+	"github.com/mittalkanishk/steerloop/internal/mockllm/scripts"
 )
 
 // auditRecord is the shape of the JSON written for a model request.
@@ -28,7 +28,7 @@ func TestAudit_SerializesTheRequestMessages(t *testing.T) {
 	raw, count, chars := SerializeMessages([]*schema.Message{
 		{Role: schema.System, Content: "sys"},
 		nil,
-		{Role: schema.Assistant, ToolCalls: []schema.ToolCall{steerlooptest.ToolCall("c1", "lookup", `{"q":1}`)}},
+		{Role: schema.Assistant, ToolCalls: []schema.ToolCall{scripts.ToolCall("c1", "lookup", `{"q":1}`)}},
 		{Role: schema.Tool, Content: "found", ToolCallID: "c1", ToolName: "lookup"},
 	})
 
@@ -79,7 +79,7 @@ func TestAudit_SerializesTheAssistantToolCalls(t *testing.T) {
 	assert.Equal(t, "[]", string(SerializeToolCalls(nil)))
 	assert.Equal(t, "[]", string(SerializeToolCalls(&schema.Message{})))
 
-	raw := SerializeToolCalls(&schema.Message{ToolCalls: []schema.ToolCall{steerlooptest.ToolCall("c1", "lookup", `{}`)}})
+	raw := SerializeToolCalls(&schema.Message{ToolCalls: []schema.ToolCall{scripts.ToolCall("c1", "lookup", `{}`)}})
 	assert.Contains(t, string(raw), `"id":"c1"`)
 }
 
@@ -87,7 +87,7 @@ func TestAudit_ClassifiesTheReply(t *testing.T) {
 	assert.Equal(t, "error", responseKind(nil))
 	assert.Equal(t, "text", responseKind(&schema.Message{Content: "x"}))
 	assert.Equal(t, "tool_calls", responseKind(&schema.Message{
-		ToolCalls: []schema.ToolCall{steerlooptest.ToolCall("call_1", "get_profile", `{}`)},
+		ToolCalls: []schema.ToolCall{scripts.ToolCall("call_1", "get_profile", `{}`)},
 	}))
 }
 
@@ -105,7 +105,7 @@ func FuzzSerializeMessages(f *testing.F) {
 				Content:    content,
 				ToolCallID: callID,
 				ToolName:   toolName,
-				ToolCalls:  []schema.ToolCall{steerlooptest.ToolCall(callID, toolName, args)},
+				ToolCalls:  []schema.ToolCall{scripts.ToolCall(callID, toolName, args)},
 			})
 		}
 		raw, _, _ := SerializeMessages(msgs)

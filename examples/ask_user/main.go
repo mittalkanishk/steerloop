@@ -13,10 +13,10 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/mittalkanishk/steerloop/internal/mockllm/scripts"
 	"github.com/mittalkanishk/steerloop/loop"
 	"github.com/mittalkanishk/steerloop/loop/event"
 	"github.com/mittalkanishk/steerloop/loop/pause"
-	"github.com/mittalkanishk/steerloop/steerlooptest"
 )
 
 // askUser handles ask_user calls in place of the ToolExecutor: it announces
@@ -47,11 +47,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	chatModel := steerlooptest.NewScriptedModel(
-		steerlooptest.Step{ToolCalls: []schema.ToolCall{
-			steerlooptest.ToolCall("call_1", "ask_user", `{"question":"What should the report be called?"}`),
+	chatModel := scripts.NewScriptedModel(
+		scripts.Step{ToolCalls: []schema.ToolCall{
+			scripts.ToolCall("call_1", "ask_user", `{"question":"What should the report be called?"}`),
 		}},
-		steerlooptest.Step{Content: "Thanks. I will use that title."},
+		scripts.Step{Content: "Thanks. I will use that title."},
 	)
 
 	cfg := loop.DefaultConfig()

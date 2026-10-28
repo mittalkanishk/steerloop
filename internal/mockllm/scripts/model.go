@@ -1,6 +1,7 @@
-// Package steerlooptest provides a scripted chat model and a recording tool
-// executor for testing code built on steerloop without calling a provider.
-package steerlooptest
+// Package scripts is a chat model that plays a script: replies in order, from
+// Go (Step) or a JSON file (LoadScript). It backs the CLI's script:<file>
+// model, the examples and the loop tests, so none of them needs a provider.
+package scripts
 
 import (
 	"context"
@@ -70,7 +71,7 @@ func (m *ScriptedModel) nextStep() (Step, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if len(m.steps) == 0 {
-		return Step{}, errors.New("steerlooptest: scripted model has no steps")
+		return Step{}, errors.New("scripts: scripted model has no steps")
 	}
 	idx := m.next
 	if idx >= len(m.steps) {

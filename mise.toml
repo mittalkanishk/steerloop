@@ -22,3 +22,7 @@ file = ".mise/scripts/git-tag-release.sh"
 [tasks.steerloop]
 description = "Run the local steerloop binary"
 run = "go run ./cmd/steerloop"
+
+[tasks.mocks]
+description = "Regenerate the mocks in each _mocks folder from .mockery.yml"
+run = "mockery"

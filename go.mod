@@ -74,6 +74,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/slongfield/pyfmt v0.0.0-20220222012616-ea85ff4c361f // indirect
 	github.com/standard-webhooks/standard-webhooks/libraries v0.0.1 // indirect
+	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect

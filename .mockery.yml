@@ -1,0 +1,13 @@
+# Mocks are generated, not written: `mise run mocks`. Each package's mocks go
+# in an _mocks folder beside it (package mocks); the go tool skips folders
+# that start with _, so ./... never tests, vets or lints generated code.
+template: testify
+dir: "{{.InterfaceDir}}/_mocks"
+pkgname: mocks
+structname: "{{.InterfaceName}}"
+filename: "{{.InterfaceName}}.go"
+force-file-write: true
+packages:
+  github.com/mittalkanishk/steerloop/loop:
+    interfaces:
+      ToolExecutor:

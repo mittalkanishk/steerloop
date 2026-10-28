@@ -13,10 +13,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 
+	"github.com/mittalkanishk/steerloop/internal/mockllm/scripts"
 	"github.com/mittalkanishk/steerloop/loop"
+	mocks "github.com/mittalkanishk/steerloop/loop/_mocks"
 	"github.com/mittalkanishk/steerloop/loop/event"
 	"github.com/mittalkanishk/steerloop/loop/registry"
-	"github.com/mittalkanishk/steerloop/steerlooptest"
 )
 
 func TestMain(m *testing.M) {
@@ -36,17 +37,17 @@ func newLoop(t *testing.T, llm model.ToolCallingChatModel) *loop.Loop {
 		StreamEvents:     true,
 		DisableStreaming: true,
 	}
-	loop, err := loop.New(cfg, llm, nil, steerlooptest.NewRecordingExecutor(nil), nil)
+	loop, err := loop.New(cfg, llm, nil, mocks.NewToolExecutor(t), nil)
 	require.NoError(t, err)
 	return loop
 }
 
 // heldModel answers every call with text but holds its first call open until
 // release is called, so the loop is known to be running.
-func heldModel(text string) (llm *steerlooptest.ScriptedModel, release func()) {
+func heldModel(text string) (llm *scripts.ScriptedModel, release func()) {
 	gate := make(chan struct{})
 	var first, once sync.Once
-	llm = &steerlooptest.ScriptedModel{
+	llm = &scripts.ScriptedModel{
 		Handler: func(context.Context, []*schema.Message, ...model.Option) (*schema.Message, error) {
 			first.Do(func() { <-gate })
 			return &schema.Message{Role: schema.Assistant, Content: text}, nil
@@ -132,14 +133,14 @@ func TestRegistry_StopsAndSteersALoopByKey(t *testing.T) {
 func TestRegistry_AcceptsStructKeys(t *testing.T) {
 	type key struct{ Tenant, Run string }
 	reg := registry.New[key]()
-	reg.Register(key{"a", "1"}, newLoop(t, steerlooptest.NewScriptedModel(steerlooptest.Step{Content: "x"})), nil)
+	reg.Register(key{"a", "1"}, newLoop(t, scripts.NewScriptedModel(scripts.Step{Content: "x"})), nil)
 	assert.True(t, reg.Has(key{"a", "1"}))
 	assert.False(t, reg.Has(key{"a", "2"}))
 }
 
 func TestRegistry_IsSafeForConcurrentUse(t *testing.T) {
 	reg := registry.New[string]()
-	loop := newLoop(t, steerlooptest.NewScriptedModel(steerlooptest.Step{Content: "x"}))
+	loop := newLoop(t, scripts.NewScriptedModel(scripts.Step{Content: "x"}))
 
 	var workers sync.WaitGroup
 	for i := range 16 {

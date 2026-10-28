@@ -11,9 +11,9 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/mittalkanishk/steerloop/internal/mockllm/scripts"
 	"github.com/mittalkanishk/steerloop/loop"
 	"github.com/mittalkanishk/steerloop/loop/event"
-	"github.com/mittalkanishk/steerloop/steerlooptest"
 )
 
 // noTools is the ToolExecutor for a loop that offers the model no tools.
@@ -35,8 +35,8 @@ func steer(l *loop.Loop) {
 }
 
 func main() {
-	chatModel := steerlooptest.NewScriptedModel(
-		steerlooptest.Step{Content: "Still researching…", Delay: 200 * time.Millisecond},
+	chatModel := scripts.NewScriptedModel(
+		scripts.Step{Content: "Still researching…", Delay: 200 * time.Millisecond},
 	)
 
 	cfg := loop.DefaultConfig()

@@ -131,7 +131,7 @@ The reply becomes the tool's result. A handler can also run tools and call the m
 
 ### Testing your agent
 
-`steerlooptest.ScriptedModel` plays a list of replies (text, tool calls, errors, slow or chunked streams) so loop behaviour can be tested without a provider. `steerlooptest.RecordingExecutor` records tool calls.
+`loop.New` takes the model and the tool executor as interfaces (`model.ToolCallingChatModel`, `loop.ToolExecutor`), so a test can pass mocks of both and run the loop without a provider. To try an agent from the command line without a key, give `steerloop run` a scripted model: `--model script:<file.json>` plays a list of replies (text, tool calls, errors, slow or chunked streams).
 
 ## CLI
 
@@ -276,6 +276,7 @@ A tool still runs with your permissions and environment. The manifest is the sec
 ```sh
 go test -race ./...                                    # no network, no API key
 go test ./cmd/steerloop -update                        # rewrite golden files
+mise run mocks                                         # regenerate the _mocks folders from .mockery.yml
 STEERLOOP_LIVE=1 STEERLOOP_LIVE_MODEL=openai:<model> \
   go test ./cmd/steerloop -run TestCLISuite -testify.m LiveSmoke
 vhs docs/demo/steer.tape                               # re-record the demo GIF (needs ANTHROPIC_API_KEY)

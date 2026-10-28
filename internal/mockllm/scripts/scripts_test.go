@@ -1,4 +1,4 @@
-package steerlooptest_test
+package scripts_test
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 
-	"github.com/mittalkanishk/steerloop/steerlooptest"
+	"github.com/mittalkanishk/steerloop/internal/mockllm/scripts"
 )
 
 func TestMain(m *testing.M) {
@@ -26,16 +26,16 @@ func userMessage(text string) []*schema.Message {
 	return []*schema.Message{{Role: schema.User, Content: text}}
 }
 
-func says(text string) steerlooptest.Step { return steerlooptest.Step{Content: text} }
+func says(text string) scripts.Step { return scripts.Step{Content: text} }
 
-func fails(err error) steerlooptest.Step { return steerlooptest.Step{Err: err} }
+func fails(err error) scripts.Step { return scripts.Step{Err: err} }
 
 // =============================================================================
 // ScriptedModel
 // =============================================================================
 
 func TestScriptedModel_PlaysTheStepsThenRepeatsTheLast(t *testing.T) {
-	m := steerlooptest.NewScriptedModel(says("one"), fails(errors.New("boom")), says("three"))
+	m := scripts.NewScriptedModel(says("one"), fails(errors.New("boom")), says("three"))
 	ctx := context.Background()
 
 	msg, err := m.Generate(ctx, userMessage("a"), model.WithTemperature(0.5))
@@ -57,7 +57,7 @@ func TestScriptedModel_PlaysTheStepsThenRepeatsTheLast(t *testing.T) {
 }
 
 func TestScriptedModel_WithoutStepsRejectsEveryCall(t *testing.T) {
-	m := steerlooptest.NewScriptedModel()
+	m := scripts.NewScriptedModel()
 	assert.Nil(t, m.LastMessages())
 	assert.Nil(t, m.LastOptions())
 
@@ -68,7 +68,7 @@ func TestScriptedModel_WithoutStepsRejectsEveryCall(t *testing.T) {
 }
 
 func TestScriptedModel_ADelayHonoursTheContext(t *testing.T) {
-	m := steerlooptest.NewScriptedModel(steerlooptest.Step{Content: "late", Delay: time.Second})
+	m := scripts.NewScriptedModel(scripts.Step{Content: "late", Delay: time.Second})
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 
@@ -80,13 +80,13 @@ func TestScriptedModel_ADelayHonoursTheContext(t *testing.T) {
 
 func TestScriptedModel_StreamsChunksAndJoinsThemForGenerate(t *testing.T) {
 	usage := &schema.TokenUsage{PromptTokens: 3, CompletionTokens: 2}
-	step := steerlooptest.Step{
-		Chunks:    []steerlooptest.Chunk{{Content: "ab"}, {Content: "cd", Delay: 5 * time.Millisecond}},
-		ToolCalls: []schema.ToolCall{steerlooptest.ToolCall("c1", "lookup", `{}`)},
+	step := scripts.Step{
+		Chunks:    []scripts.Chunk{{Content: "ab"}, {Content: "cd", Delay: 5 * time.Millisecond}},
+		ToolCalls: []schema.ToolCall{scripts.ToolCall("c1", "lookup", `{}`)},
 		Usage:     usage,
 	}
 
-	reader, err := steerlooptest.NewScriptedModel(step).Stream(context.Background(), userMessage("a"))
+	reader, err := scripts.NewScriptedModel(step).Stream(context.Background(), userMessage("a"))
 	require.NoError(t, err)
 	defer reader.Close()
 	var chunks []*schema.Message
@@ -103,15 +103,15 @@ func TestScriptedModel_StreamsChunksAndJoinsThemForGenerate(t *testing.T) {
 	assert.Equal(t, "lookup", chunks[1].ToolCalls[0].Function.Name, "tool calls ride on the last chunk")
 	assert.Equal(t, usage, chunks[1].ResponseMeta.Usage)
 
-	msg, err := steerlooptest.NewScriptedModel(step).Generate(context.Background(), userMessage("a"))
+	msg, err := scripts.NewScriptedModel(step).Generate(context.Background(), userMessage("a"))
 	require.NoError(t, err)
 	assert.Equal(t, "abcd", msg.Content, "Generate joins the chunks")
 	assert.Equal(t, usage, msg.ResponseMeta.Usage)
 }
 
 func TestScriptedModel_AStreamStopsWhenTheContextIsCancelled(t *testing.T) {
-	m := steerlooptest.NewScriptedModel(steerlooptest.Step{
-		Chunks: []steerlooptest.Chunk{{Content: "a"}, {Content: "b", Delay: time.Second}},
+	m := scripts.NewScriptedModel(scripts.Step{
+		Chunks: []scripts.Chunk{{Content: "a"}, {Content: "b", Delay: time.Second}},
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	reader, err := m.Stream(ctx, userMessage("a"))
@@ -126,7 +126,7 @@ func TestScriptedModel_AStreamStopsWhenTheContextIsCancelled(t *testing.T) {
 }
 
 func TestScriptedModel_AStreamReportsAStepErrorAndSendsTextAsOneChunk(t *testing.T) {
-	m := steerlooptest.NewScriptedModel(fails(errors.New("nope")), says("whole"))
+	m := scripts.NewScriptedModel(fails(errors.New("nope")), says("whole"))
 
 	_, err := m.Stream(context.Background(), userMessage("a"))
 	assert.EqualError(t, err, "nope")
@@ -139,7 +139,7 @@ func TestScriptedModel_AStreamReportsAStepErrorAndSendsTextAsOneChunk(t *testing
 }
 
 func TestScriptedModel_AHandlerReplacesTheScript(t *testing.T) {
-	m := &steerlooptest.ScriptedModel{
+	m := &scripts.ScriptedModel{
 		Handler: func(_ context.Context, msgs []*schema.Message, _ ...model.Option) (*schema.Message, error) {
 			if msgs[0].Content == "fail" {
 				return nil, errors.New("handler failed")
@@ -164,7 +164,7 @@ func TestScriptedModel_AHandlerReplacesTheScript(t *testing.T) {
 }
 
 func TestScriptedModel_RecordsOptionsAndBoundTools(t *testing.T) {
-	m := steerlooptest.NewScriptedModel(says("x"))
+	m := scripts.NewScriptedModel(says("x"))
 	bound, err := m.WithTools([]*schema.ToolInfo{{Name: "lookup"}})
 	require.NoError(t, err)
 	assert.Same(t, m, bound)
@@ -178,31 +178,11 @@ func TestScriptedModel_RecordsOptionsAndBoundTools(t *testing.T) {
 }
 
 // =============================================================================
-// RecordingExecutor
-// =============================================================================
-
-func TestRecordingExecutor_RecordsEveryCall(t *testing.T) {
-	out, err := steerlooptest.NewRecordingExecutor(nil).ExecuteTool(context.Background(), "lookup", `{"q":1}`)
-	require.NoError(t, err)
-	assert.Equal(t, "result from lookup", out, "the default answer names the tool")
-
-	failing := steerlooptest.NewRecordingExecutor(func(_ context.Context, name, args string) (string, error) {
-		return "", errors.New(name + " failed with " + args)
-	})
-	_, err = failing.ExecuteTool(context.Background(), "a", "{}")
-	assert.EqualError(t, err, "a failed with {}")
-	_, _ = failing.ExecuteTool(context.Background(), "b", "[]")
-	assert.Equal(t, 2, failing.CallCount())
-	assert.Equal(t, []string{"a", "b"}, failing.CalledTools())
-	assert.Equal(t, []steerlooptest.ExecutedCall{{Name: "a", Args: "{}"}, {Name: "b", Args: "[]"}}, failing.Calls())
-}
-
-// =============================================================================
 // Scripts
 // =============================================================================
 
 func TestScript_ParsesStepsFromJSON(t *testing.T) {
-	steps, err := steerlooptest.ParseScript([]byte(`{"steps":[
+	steps, err := scripts.ParseScript([]byte(`{"steps":[
 		{"tool_calls":[{"id":"c1","name":"lookup","arguments":{"q": "x"}},{"name":"ping"},{"name":"raw","arguments":"{\"a\":1}"}]},
 		{"content":"answer","delay_ms":15,"usage":{"input":10,"output":4}},
 		{"error":"rate limited"},
@@ -223,7 +203,7 @@ func TestScript_ParsesStepsFromJSON(t *testing.T) {
 	assert.Equal(t, 15*time.Millisecond, steps[1].Delay)
 	assert.Equal(t, 14, steps[1].Usage.TotalTokens)
 	assert.EqualError(t, steps[2].Err, "rate limited")
-	assert.Equal(t, []steerlooptest.Chunk{{Content: "a"}, {Content: "b", Delay: 7 * time.Millisecond}}, steps[3].Chunks)
+	assert.Equal(t, []scripts.Chunk{{Content: "a"}, {Content: "b", Delay: 7 * time.Millisecond}}, steps[3].Chunks)
 }
 
 func TestScript_RejectsMalformedInput(t *testing.T) {
@@ -235,7 +215,7 @@ func TestScript_RejectsMalformedInput(t *testing.T) {
 		{"bad arg string", `{"steps":[{"tool_calls":[{"name":"x","arguments":"{oops"}]}]}`, "not valid JSON"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := steerlooptest.ParseScript([]byte(tc.in))
+			_, err := scripts.ParseScript([]byte(tc.in))
 			assert.ErrorContains(t, err, tc.want)
 		})
 	}
@@ -244,14 +224,14 @@ func TestScript_RejectsMalformedInput(t *testing.T) {
 func TestScript_LoadsFromAFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "s.json")
 	require.NoError(t, os.WriteFile(path, []byte(`{"steps":[{"content":"hi"}]}`), 0o600))
-	steps, err := steerlooptest.LoadScript(path)
+	steps, err := scripts.LoadScript(path)
 	require.NoError(t, err)
 	assert.Equal(t, "hi", steps[0].Content)
 
-	_, err = steerlooptest.LoadScript(filepath.Join(t.TempDir(), "missing.json"))
+	_, err = scripts.LoadScript(filepath.Join(t.TempDir(), "missing.json"))
 	assert.Error(t, err)
 
 	require.NoError(t, os.WriteFile(path, []byte(`{"steps":[]}`), 0o600))
-	_, err = steerlooptest.LoadScript(path)
+	_, err = scripts.LoadScript(path)
 	assert.ErrorContains(t, err, "s.json", "the error names the file")
 }
