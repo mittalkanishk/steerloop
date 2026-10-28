@@ -7,7 +7,7 @@
 //	internal/cmds/run/run.go    one turn: what happens, what it needs, and
 //	                            (NewRun) what fills each need
 //	internal/cmds/chat/chat.go  a session of turns at a terminal
-//	internal/agent              what both share: flags, loops, tools, recording
+//	internal/bootstrap          what both share: flags, loops, tools, recording
 //	then any package under internal/ that NewRun or NewChat names
 package main
 

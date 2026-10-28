@@ -9,7 +9,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/mittalkanishk/steerloop/cmd/steerloop/internal/agent"
+	"github.com/mittalkanishk/steerloop/cmd/steerloop/internal/bootstrap"
 	"github.com/mittalkanishk/steerloop/cmd/steerloop/internal/cli"
 )
 
@@ -59,12 +59,12 @@ func (c *Command) Run(ctx context.Context, args []string) int {
 
 // ParseOptions reads the `steerloop chat` command line: the flags shared
 // with run, and an optional first prompt.
-func ParseOptions(args []string, stderr io.Writer) (agent.Options, error) {
-	var opts agent.Options
+func ParseOptions(args []string, stderr io.Writer) (bootstrap.Options, error) {
+	var opts bootstrap.Options
 	flags := flag.NewFlagSet("steerloop chat", flag.ContinueOnError)
 	opts.AddFlags(flags)
 	flags.StringVar(&opts.UserPrompt, "user-prompt", "", "the first prompt; without it, chat starts at the prompt")
 
-	err := agent.ParseFlags(flags, args, stderr)
+	err := bootstrap.ParseFlags(flags, args, stderr)
 	return opts, err
 }

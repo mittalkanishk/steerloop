@@ -9,7 +9,7 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
-	"github.com/mittalkanishk/steerloop/cmd/steerloop/internal/agent"
+	"github.com/mittalkanishk/steerloop/cmd/steerloop/internal/bootstrap"
 	"github.com/mittalkanishk/steerloop/cmd/steerloop/internal/cli"
 	"github.com/mittalkanishk/steerloop/cmd/steerloop/internal/interrupt"
 	"github.com/mittalkanishk/steerloop/cmd/steerloop/internal/render"
@@ -42,8 +42,8 @@ type SteeringSource interface {
 type Run struct {
 	loop        *loop.Loop
 	messages    []*schema.Message
-	sinks       []EventSink      // every event goes to each: the screen, then the recording if any
-	recording   *agent.Recording // nil: not recording
+	sinks       []EventSink          // every event goes to each: the screen, then the recording if any
+	recording   *bootstrap.Recording // nil: not recording
 	input       InputReader
 	steering    SteeringSource
 	controlFile *os.File // what steering reads with --control-file; nil without
@@ -60,7 +60,7 @@ func NewRun(ctx context.Context, env cli.Environment, opts Options) (*Run, error
 	// terminal, or a program writing inject lines to --control-file.
 	humanAvailable := env.StdinIsTerminal() || opts.ControlPath != ""
 
-	loops, err := agent.NewLoops(ctx, env, opts.Options, humanAvailable)
+	loops, err := bootstrap.NewLoops(ctx, env, opts.Options, humanAvailable)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func NewRun(ctx context.Context, env cli.Environment, opts Options) (*Run, error
 		return nil, err
 	}
 
-	messages, err := agent.InitialMessages(opts.Options)
+	messages, err := bootstrap.InitialMessages(opts.Options)
 	if err != nil {
 		return nil, err
 	}
@@ -105,9 +105,9 @@ func NewRun(ctx context.Context, env cli.Environment, opts Options) (*Run, error
 
 	// Recording: a second sink, opened last so no earlier failure leaves an
 	// empty file behind. An empty --output-record-path turns it off.
-	var recording *agent.Recording
+	var recording *bootstrap.Recording
 	if opts.OutputRecordPath != "" {
-		if recording, err = agent.OpenRecording(opts.OutputRecordPath, time.Now()); err != nil {
+		if recording, err = bootstrap.OpenRecording(opts.OutputRecordPath, time.Now()); err != nil {
 			if controlFile != nil {
 				_ = controlFile.Close()
 			}

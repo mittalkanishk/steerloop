@@ -1,7 +1,7 @@
-// Package agent is what `steerloop run` and `steerloop chat` share: the
+// Package bootstrap is what `steerloop run` and `steerloop chat` share: the
 // flags they both take, the loop each turn runs, its tools and the
 // recording. How turns are run is each command's own business.
-package agent
+package bootstrap
 
 import (
 	"errors"

@@ -7,13 +7,13 @@ import (
 	"io"
 	"strings"
 
-	"github.com/mittalkanishk/steerloop/cmd/steerloop/internal/agent"
+	"github.com/mittalkanishk/steerloop/cmd/steerloop/internal/bootstrap"
 )
 
 // Options is the `steerloop run` command line: the flags shared with chat,
 // and the ones only a single run has.
 type Options struct {
-	agent.Options
+	bootstrap.Options
 	// Output Options
 	Output string
 	// Steering/Loop Control Options
@@ -30,11 +30,11 @@ func ParseOptions(args []string, stderr io.Writer) (Options, error) {
 	// Steering the loop
 	flags.StringVar(&opts.ControlPath, "control-file", "", `steer the run from JSONL lines in this file or FIFO: {"type":"stop"}, {"type":"inject","message":"..."} or {"type":"modify_config","max_iterations":N,"temperature":T}; "wait_ms" delays a line`)
 
-	err := agent.ParseFlags(flags, args, stderr)
+	err := bootstrap.ParseFlags(flags, args, stderr)
 	return opts, err
 }
 
-// Validate is agent.Options.Validate, plus the prompt and --output. It
+// Validate is bootstrap.Options.Validate, plus the prompt and --output. It
 // reports every problem at once, not just the first.
 func (o Options) Validate() error {
 	var errs []error

@@ -9,7 +9,7 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
-	"github.com/mittalkanishk/steerloop/cmd/steerloop/internal/agent"
+	"github.com/mittalkanishk/steerloop/cmd/steerloop/internal/bootstrap"
 	"github.com/mittalkanishk/steerloop/cmd/steerloop/internal/cli"
 	"github.com/mittalkanishk/steerloop/cmd/steerloop/internal/interrupt"
 	"github.com/mittalkanishk/steerloop/cmd/steerloop/internal/prompt"
@@ -21,7 +21,7 @@ import (
 )
 
 // EventSink receives every event the loop emits.
-// → cmd/steerloop/internal/render (the screen), agent.Recording (the file)
+// → cmd/steerloop/internal/render (the screen), bootstrap.Recording (the file)
 type EventSink interface {
 	Write(evt event.Event)
 }
@@ -31,12 +31,12 @@ type EventSink interface {
 // types: one reader of stdin feeds both the steering while a turn runs and
 // the "❯ " prompt after it.
 type Chat struct {
-	loops      agent.Loops
+	loops      bootstrap.Loops
 	first      *loop.Loop // built by NewChat, so a bad setting fails before any call
 	messages   []*schema.Message
-	prompted   bool             // --user-prompt gave the first turn its prompt
-	sinks      []EventSink      // every event goes to each: the screen, then the recording if any
-	recording  *agent.Recording // nil: not recording
+	prompted   bool                 // --user-prompt gave the first turn its prompt
+	sinks      []EventSink          // every event goes to each: the screen, then the recording if any
+	recording  *bootstrap.Recording // nil: not recording
 	input      *stdin.Lines
 	steering   steering.Terminal
 	prompt     prompt.Terminal
@@ -46,10 +46,10 @@ type Chat struct {
 
 // NewChat builds a Chat from options. Command.Run has already checked that
 // stdin is a terminal.
-func NewChat(ctx context.Context, env cli.Environment, opts agent.Options) (*Chat, error) {
+func NewChat(ctx context.Context, env cli.Environment, opts bootstrap.Options) (*Chat, error) {
 
 	// A person is at the terminal to answer ask_user and confirm questions.
-	loops, err := agent.NewLoops(ctx, env, opts, true)
+	loops, err := bootstrap.NewLoops(ctx, env, opts, true)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func NewChat(ctx context.Context, env cli.Environment, opts agent.Options) (*Cha
 		return nil, err
 	}
 
-	messages, err := agent.InitialMessages(opts)
+	messages, err := bootstrap.InitialMessages(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -70,9 +70,9 @@ func NewChat(ctx context.Context, env cli.Environment, opts agent.Options) (*Cha
 
 	// Recording: a second sink, opened last so no earlier failure leaves an
 	// empty file behind. One file holds every turn of the session.
-	var recording *agent.Recording
+	var recording *bootstrap.Recording
 	if opts.OutputRecordPath != "" {
-		if recording, err = agent.OpenRecording(opts.OutputRecordPath, time.Now()); err != nil {
+		if recording, err = bootstrap.OpenRecording(opts.OutputRecordPath, time.Now()); err != nil {
 			return nil, err
 		}
 		sinks = append(sinks, recording)
