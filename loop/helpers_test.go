@@ -5,15 +5,18 @@ import (
 	"encoding/json"
 	"log/slog"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
+	"github.com/stretchr/testify/mock"
 
+	"github.com/mittalkanishk/steerloop/internal/mockllm/scripts"
 	"github.com/mittalkanishk/steerloop/loop"
+	mocks "github.com/mittalkanishk/steerloop/loop/_mocks"
 	"github.com/mittalkanishk/steerloop/loop/event"
 	"github.com/mittalkanishk/steerloop/loop/pause"
-	"github.com/mittalkanishk/steerloop/steerlooptest"
 )
 
 // Helpers for the loop test suite in suite_test.go: the fixtures every test
@@ -33,6 +36,29 @@ const (
 	askUserTool = "ask_user"
 )
 
+// toolsAnswer is a mock executor that answers every tool call with answer,
+// however many calls the test makes.
+func toolsAnswer(t *testing.T, answer func(ctx context.Context, name, args string) (string, error)) *mocks.ToolExecutor {
+	exec := mocks.NewToolExecutor(t)
+	exec.EXPECT().ExecuteTool(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(answer).Maybe()
+	return exec
+}
+
+// resultFrom is the answer every test gets unless it sets its own.
+func resultFrom(_ context.Context, name, _ string) (string, error) {
+	return "result from " + name, nil
+}
+
+// calledTools is the names of the tools exec ran, in order. Read it once the
+// run has ended.
+func calledTools(exec *mocks.ToolExecutor) []string {
+	var names []string
+	for _, call := range exec.Calls {
+		names = append(names, call.Arguments.String(1))
+	}
+	return names
+}
+
 // seedConversation is the conversation every run starts from. The loop adds
 // its stop instructions as a second system message (Engine.Seed), so the
 // model sees three messages on its first call.
@@ -44,28 +70,28 @@ func seedConversation() []*schema.Message {
 }
 
 // says is a model turn that answers with text.
-func says(text string) steerlooptest.Step {
-	return steerlooptest.Step{Content: text}
+func says(text string) scripts.Step {
+	return scripts.Step{Content: text}
 }
 
 // asksFor is a model turn that asks for tools.
-func asksFor(toolCalls ...schema.ToolCall) steerlooptest.Step {
-	return steerlooptest.Step{ToolCalls: toolCalls}
+func asksFor(toolCalls ...schema.ToolCall) scripts.Step {
+	return scripts.Step{ToolCalls: toolCalls}
 }
 
 // fails is a model turn whose call returns err.
-func fails(err error) steerlooptest.Step {
-	return steerlooptest.Step{Err: err}
+func fails(err error) scripts.Step {
+	return scripts.Step{Err: err}
 }
 
 // profileCall is a call to the profile tool.
 func profileCall() schema.ToolCall {
-	return steerlooptest.ToolCall("call_1", profileTool, `{}`)
+	return scripts.ToolCall("call_1", profileTool, `{}`)
 }
 
 // finishCall ends a StopOnFinishTool run with args as its result.
 func finishCall(args string) schema.ToolCall {
-	return steerlooptest.ToolCall("call_finish", loop.FinishToolName, args)
+	return scripts.ToolCall("call_finish", loop.FinishToolName, args)
 }
 
 // sampleTools are the tool definitions a test binds to the model.
@@ -101,9 +127,9 @@ func (s *LoopSuite) run(loop *loop.Loop) []event.Event {
 }
 
 // runScript runs a loop against a model that plays steps in order.
-func (s *LoopSuite) runScript(steps ...steerlooptest.Step) ([]event.Event, *steerlooptest.ScriptedModel) {
+func (s *LoopSuite) runScript(steps ...scripts.Step) ([]event.Event, *scripts.ScriptedModel) {
 	s.T().Helper()
-	llm := steerlooptest.NewScriptedModel(steps...)
+	llm := scripts.NewScriptedModel(steps...)
 	return s.run(s.newLoop(llm)), llm
 }
 
@@ -167,7 +193,7 @@ func eventsOfType(events []event.Event, t event.Type) []event.Event {
 }
 
 // lastMessage is the newest message the model saw on its most recent call.
-func lastMessage(llm *steerlooptest.ScriptedModel) *schema.Message {
+func lastMessage(llm *scripts.ScriptedModel) *schema.Message {
 	msgs := llm.LastMessages()
 	return msgs[len(msgs)-1]
 }
@@ -175,10 +201,10 @@ func lastMessage(llm *steerlooptest.ScriptedModel) *schema.Message {
 // heldModel answers every call with text but holds its first call open until
 // release is called. A test uses it to act on a loop that is known to be
 // inside a model call.
-func heldModel(text string) (llm *steerlooptest.ScriptedModel, release func()) {
+func heldModel(text string) (llm *scripts.ScriptedModel, release func()) {
 	gate := make(chan struct{})
 	var first, once sync.Once
-	llm = &steerlooptest.ScriptedModel{
+	llm = &scripts.ScriptedModel{
 		Handler: func(context.Context, []*schema.Message, ...model.Option) (*schema.Message, error) {
 			first.Do(func() { <-gate })
 			return &schema.Message{Role: schema.Assistant, Content: text}, nil
@@ -188,7 +214,7 @@ func heldModel(text string) (llm *steerlooptest.ScriptedModel, release func()) {
 }
 
 // waitForModelCall returns once the loop is inside its first model call.
-func (s *LoopSuite) waitForModelCall(llm *steerlooptest.ScriptedModel) {
+func (s *LoopSuite) waitForModelCall(llm *scripts.ScriptedModel) {
 	s.T().Helper()
 	s.Require().Eventually(func() bool { return llm.CallCount() > 0 }, eventTimeout, time.Millisecond)
 }
@@ -204,10 +230,10 @@ func (f pauseFunc) Handle(ctx context.Context, call pause.Call, s pause.Session)
 
 // pausingLoop builds a loop whose first model turn calls the ask_user pause
 // tool and whose second turn says "thanks".
-func (s *LoopSuite) pausingLoop(h pause.Handler) (*loop.Loop, *steerlooptest.ScriptedModel) {
+func (s *LoopSuite) pausingLoop(h pause.Handler) (*loop.Loop, *scripts.ScriptedModel) {
 	s.T().Helper()
-	llm := steerlooptest.NewScriptedModel(
-		asksFor(steerlooptest.ToolCall("call_1", askUserTool, `{"question":"colour?"}`)),
+	llm := scripts.NewScriptedModel(
+		asksFor(scripts.ToolCall("call_1", askUserTool, `{"question":"colour?"}`)),
 		says("thanks"),
 	)
 	s.cfg.Pauses = map[string]pause.Handler{askUserTool: h}
@@ -216,7 +242,7 @@ func (s *LoopSuite) pausingLoop(h pause.Handler) (*loop.Loop, *steerlooptest.Scr
 
 // blockedPausingLoop builds a pausing loop whose pause waits for an inject.
 // blocked is closed once the pause is waiting.
-func (s *LoopSuite) blockedPausingLoop() (loop *loop.Loop, llm *steerlooptest.ScriptedModel, blocked <-chan struct{}) {
+func (s *LoopSuite) blockedPausingLoop() (loop *loop.Loop, llm *scripts.ScriptedModel, blocked <-chan struct{}) {
 	s.T().Helper()
 	waiting := make(chan struct{})
 	loop, llm = s.pausingLoop(pauseFunc(func(ctx context.Context, _ pause.Call, ps pause.Session) (string, bool) {
@@ -246,7 +272,7 @@ func (f failingBinder) WithTools([]*schema.ToolInfo) (model.ToolCallingChatModel
 
 // countingModel counts how often each model entry point is used.
 type countingModel struct {
-	inner            *steerlooptest.ScriptedModel
+	inner            *scripts.ScriptedModel
 	generate, stream int
 }
 
@@ -350,7 +376,7 @@ func (keepNewest) Compact(msgs []*schema.Message) []*schema.Message {
 
 // stopInstructionsSeen is the system message the loop placed after the
 // caller's own on the model's first call.
-func stopInstructionsSeen(llm *steerlooptest.ScriptedModel) *schema.Message {
+func stopInstructionsSeen(llm *scripts.ScriptedModel) *schema.Message {
 	return llm.Calls()[0][1]
 }
 
@@ -408,16 +434,16 @@ func (rateLimitedOnly) IsTransient(err error) bool {
 const verdictTool = "review_verdict"
 
 // rules is a judge turn that returns a verdict.
-func rules(verdict, reason, hint string) steerlooptest.Step {
+func rules(verdict, reason, hint string) scripts.Step {
 	args, _ := json.Marshal(map[string]any{"verdict": verdict, "reason": reason, "hint": hint, "confidence": 0.9})
-	return asksFor(steerlooptest.ToolCall("call_verdict", verdictTool, string(args)))
+	return asksFor(scripts.ToolCall("call_verdict", verdictTool, string(args)))
 }
 
 // passes is a judge turn that passes the answer.
-func passes() steerlooptest.Step { return rules("pass", "", "") }
+func passes() scripts.Step { return rules("pass", "", "") }
 
 // judgeBrief is the user message of the judge call at index i.
-func judgeBrief(llm *steerlooptest.ScriptedModel, i int) string {
+func judgeBrief(llm *scripts.ScriptedModel, i int) string {
 	call := llm.Calls()[i]
 	return call[len(call)-1].Content
 }

@@ -15,6 +15,10 @@ file = ".mise/scripts/test.sh"
 description = "Run golangci-lint"
 file = ".mise/scripts/lint.sh"
 
+[tasks.generate-mocks]
+description = "Regenerate the mocks in each _mocks folder from .mockery.yml"
+file = ".mise/scripts/mocks.sh"
+
 [tasks.git-tag-release]
 description = "Tag a release from main and push the tag (triggers the Release workflow). Set VERSION=vX.Y.Z to skip the prompt."
 file = ".mise/scripts/git-tag-release.sh"

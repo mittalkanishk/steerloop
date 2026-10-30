@@ -2,10 +2,45 @@
 
 ## Unreleased
 
-- New `steerloop chat`: a multi-turn session at the terminal. After each turn it prints a `❯ ` prompt between two faint rules, and the next line starts a new turn with the conversation kept. `--user-prompt` is optional. Ctrl-D, or Ctrl-C at the prompt, ends it. `steerloop run` is still one turn.
-- Breaking: `steerloop run` takes the prompt only from `--prompt <text>`, which is required. Words after the flags are a usage error, and stdin is no longer read as the prompt. Update `steerloop run ... "do it"` to `steerloop run ... --prompt "do it"`.
+- Breaking: `steerlooptest` is removed. The scripted model moved to `internal/mockllm/scripts`, where it still backs `--model script:<file>` and the examples. The loop tests use a mockery mock of `loop.ToolExecutor` in `loop/_mocks` (`mise run mocks`). To test code built on steerloop, mock `model.ToolCallingChatModel` and `loop.ToolExecutor`.
 
-## v0.2.0
+## v0.2.7 (2026-10-28)
+
+- New `steerloop chat`: a multi-turn session at the terminal. After each turn a `❯ ` prompt continues the conversation. `--user-prompt` is optional. Ctrl-D, or Ctrl-C at the prompt, exits. `steerloop run` stays one turn.
+- The setup `run` and `chat` share (flags, loop builder, tools, recording) is in `cmd/steerloop/internal/bootstrap`.
+- The loop tests are one suite, and manual CLI checks are in `docs/cli-testing.md`.
+- `loop/wire.go` is folded into `loop/loop.go`.
+
+## v0.2.6 (2026-10-26)
+
+- Breaking: `--stop-condition explicit` is now `external-finish`.
+- A new README, with demo recordings in `docs/demo`.
+
+## v0.2.5 (2026-10-25)
+
+- Breaking: `loop2` is now `loop` (`github.com/mittalkanishk/steerloop/loop`), and the CLI is `steerloop` again, not `steerloop2`.
+
+## v0.2.4 (2026-10-25)
+
+A rewrite of the library and the CLI.
+
+- Breaking: the root package `github.com/mittalkanishk/steerloop` is removed. The library is `loop2`, with `loop2/pause` for pause handlers and `loop2/registry`. Its internals are split into packages under `loop2/internal`.
+- Stop policies (`no-tool-finish`, `finish-tool`, `explicit`) and reflection policies (`off`, `on-iteration`, `on-finish`).
+- Breaking: the CLI is `steerloop2`, with `run`, `replay`, `tools validate`, `version` and `help`. `run` is one turn and takes the prompt from `--user-prompt`. New flags: `--system-prompt`, `--stop-condition`, `--reflect`. Control-file steering is carried over. Runs are recorded to `run-recordings/` by default (`--output-record-path`). The multi-turn session and the `/max`, `/temp` and `/reflect` commands are gone.
+- The trace is coloured (lipgloss).
+
+## v0.2.3 (2026-10-17)
+
+- Breaking: `steerloop run` takes the prompt only from `--prompt <text>`, which is required. Words after the flags are a usage error, and stdin is no longer read as the prompt.
+- The CLI's internals are restructured.
+
+## v0.2.2 (2026-10-14)
+
+- `steerloop run` on a terminal is a session: after an answer it prints `> `, and the next line continues the conversation.
+- The loop tests are rewritten as one end-to-end suite.
+- CI retries module downloads before linting. GitHub Actions and testify are updated.
+
+## v0.2.0 (2026-10-13)
 
 The library and the CLI are unchanged. This release is about how the repo is kept up.
 
@@ -14,11 +49,11 @@ The library and the CLI are unchanged. This release is about how the repo is kep
 - Locally, `mise run test`, `mise run lint`, and `mise run git-tag-release`. The scripts live in `.mise/scripts`.
 - A new pull request starts from a template keyed `STLOOP-xxx`.
 
-## v0.1.1
+## v0.1.1 (2026-10-11)
 
 - The module path is now `github.com/mittalkanishk/steerloop`. v0.1.0 was published as `github.com/Kanishkmittal55/steerloop`; update imports when upgrading.
 
-## v0.1.0
+## v0.1.0 (2026-10-11)
 
 First public release.
 

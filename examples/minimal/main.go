@@ -12,9 +12,9 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/mittalkanishk/steerloop/internal/mockllm/scripts"
 	"github.com/mittalkanishk/steerloop/loop"
 	"github.com/mittalkanishk/steerloop/loop/event"
-	"github.com/mittalkanishk/steerloop/steerlooptest"
 )
 
 // upper is the loop's ToolExecutor: it runs the one tool, "upper".
@@ -41,9 +41,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	chatModel := steerlooptest.NewScriptedModel(
-		steerlooptest.Step{ToolCalls: []schema.ToolCall{steerlooptest.ToolCall("call_1", "upper", `{"text":"hello"}`)}},
-		steerlooptest.Step{Content: "The tool returned HELLO."},
+	chatModel := scripts.NewScriptedModel(
+		scripts.Step{ToolCalls: []schema.ToolCall{scripts.ToolCall("call_1", "upper", `{"text":"hello"}`)}},
+		scripts.Step{Content: "The tool returned HELLO."},
 	)
 
 	loop, err := loop.New(loop.DefaultConfig(), chatModel, []*schema.ToolInfo{upperInfo}, upper{}, nil)

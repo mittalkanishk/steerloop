@@ -1,4 +1,4 @@
-package steerlooptest
+package scripts
 
 import (
 	"bytes"
