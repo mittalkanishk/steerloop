@@ -76,7 +76,7 @@ func (e *Emitter) Emit(data event.Data) {
 	if !e.opts.StreamEvents && t != event.Done && t != event.Error {
 		return
 	}
-	evt := event.New(data, e.iterations.Iteration())
+	evt := event.NewEvent(data, e.iterations.Iteration())
 
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -100,7 +100,7 @@ func (e *Emitter) Emit(data event.Data) {
 func (e *Emitter) Done(d event.DoneData) {
 	e.doneOnce.Do(func() {
 		e.results.SetResult(d)
-		evt := event.New(d, d.Iterations)
+		evt := event.NewEvent(d, d.Iterations)
 
 		e.mu.RLock()
 		defer e.mu.RUnlock()

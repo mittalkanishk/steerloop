@@ -68,7 +68,13 @@ type Loop struct {
 // each role, so this function alone tells you what runs. llm is any Eino
 // tool-calling chat model; when tools is not empty it is bound to them.
 // A nil logger discards log output.
-func New(cfg Config, llm model.ToolCallingChatModel, tools []*schema.ToolInfo, executor ToolExecutor, logger *slog.Logger) (*Loop, error) {
+func New(
+	cfg Config,
+	llm model.ToolCallingChatModel,
+	tools []*schema.ToolInfo,
+	executor ToolExecutor,
+	logger *slog.Logger,
+) (*Loop, error) {
 	if executor == nil {
 		return nil, errors.New("loop: tool executor not configured")
 	}
@@ -273,7 +279,7 @@ func (l *Loop) State() State { return l.state.Status() }
 
 func failedStart(msg string) <-chan event.Event {
 	ch := make(chan event.Event, 1)
-	ch <- event.New(event.ErrorData{Error: msg, Fatal: true}, 0)
+	ch <- event.NewEvent(event.ErrorData{Error: msg, Fatal: true}, 0)
 	close(ch)
 	return ch
 }

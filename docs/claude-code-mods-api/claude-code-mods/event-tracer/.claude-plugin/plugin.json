@@ -1,0 +1,6 @@
+{
+  "name": "event-tracer",
+  "version": "0.1.0",
+  "description": "Logs the events Claude Code fires to the debug log, so you can watch them live",
+  "author": { "name": "Kanishk Mittal" }
+}
