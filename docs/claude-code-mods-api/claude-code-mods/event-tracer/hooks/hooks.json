@@ -1,0 +1,4 @@
+{
+  "description": "The event-tracer hooks module",
+  "modules": ["./event-tracer.js"]
+}

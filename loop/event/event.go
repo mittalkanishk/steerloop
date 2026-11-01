@@ -48,6 +48,11 @@ type Event struct {
 }
 
 // New builds the event for data, labelled with data's own Type.
-func New(data Data, iteration int) Event {
-	return Event{Type: data.Type(), Data: data, Iteration: iteration, Timestamp: time.Now().UTC()}
+func NewEvent(data Data, iteration int) Event {
+	return Event{
+		Type:      data.Type(),
+		Data:      data,
+		Iteration: iteration,
+		Timestamp: time.Now().UTC(),
+	}
 }
