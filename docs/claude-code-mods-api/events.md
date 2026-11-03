@@ -4,6 +4,76 @@ Extracted from [`mods/types/claude-code.d.ts`](https://github.com/anthropics/cla
 
 Docs: [Mods events](https://code.claude.com/docs/en/plugins/mods/events) · [Mods reference](https://code.claude.com/docs/en/plugins/mods/reference)
 
+## Watch events live: the event-tracer mod
+
+[`claude-code-mods/event-tracer`](claude-code-mods/event-tracer) is a mod that only observes. For each event it hooks, it writes one line to Claude Code's debug log and calls `next(e)` with the event unchanged, so the session runs exactly as it would without it.
+
+| File | What it holds |
+|---|---|
+| [`.claude-plugin/plugin.json`](claude-code-mods/event-tracer/.claude-plugin/plugin.json) | The mod's name, `event-tracer`. Every debug-log line it writes starts with this name. |
+| [`hooks/hooks.json`](claude-code-mods/event-tracer/hooks/hooks.json) | Points Claude Code at the hooks module. |
+| [`hooks/event-tracer.js`](claude-code-mods/event-tracer/hooks/event-tracer.js) | `register(on)`: one `on(event, ($, e, next) => …)` hook per traced event. |
+| `.claude-plugin/types/` | Written by Claude Code when it loads the mod, for your installed version. It is git-ignored; read it in place of the GitHub copy when they differ. |
+
+### Run it
+
+Load the mod with `--plugin-dir` and send the debug log to a file:
+
+```sh
+claude --plugin-dir docs/claude-code-mods-api/claude-code-mods/event-tracer --debug-file /tmp/event-tracer.log
+```
+
+In a second terminal, follow only the tracer's lines:
+
+```sh
+tail -f /tmp/event-tracer.log | grep 'EVENT '
+```
+
+`claude --debug` works too, but mixes the trace into everything else Claude Code logs. Nothing appears in the transcript: the mod logs with `$.ui.log(…, { to: "debug" })`, which writes to the debug log alone.
+
+### What it traces
+
+Ten of the [engine events](#engine-events), the ones that mark where a prompt is in its life. Each line is `EVENT <name>`, followed by the tool's name for `tool.call` and `tool.check` (the only traced events whose `e` has a `tool` field).
+
+| Event | When it shows up |
+|---|---|
+| `session.start` | Once when the mod loads, and again on each reload. |
+| `prompt.submit` | You send a prompt, before the turn starts. |
+| `turn.start` | The model turn begins, before its first model call. |
+| `tool.call` | The model asked for a tool and Claude Code is about to run it. |
+| `tool.check` | Claude Code decides whether that call may run, after `tool.call` and any PreToolUse hooks. |
+| `agent.spawn` | The Agent tool is about to start a subagent. |
+| `turn.complete` | The turn has ended. |
+| `command.run` | A slash command is about to run. |
+| `session.compact` | The conversation is about to be compacted. |
+| `session.end` | The session ends: exit, `/clear`, resume, logout, a signal, or a finished `-p` run. |
+
+A prompt that reads one file traces like this:
+
+```
+EVENT prompt.submit
+EVENT turn.start
+EVENT tool.call Read
+EVENT tool.check Read
+EVENT turn.complete
+```
+
+A turn holds as many `tool.call` / `tool.check` pairs as the model asks for tools. `turn.start` fires once per turn, not once per model call; hook `turn.step` to see every model request.
+
+### Trace other events
+
+Add an `on(…)` line to `register` for any event in the tables below, in the same shape:
+
+```js
+on('turn.step', async (mods, e, next) => {
+  trace(mods, 'turn.step', e); return next(e)
+})
+```
+
+Keep the `return next(e)`. Without it the event stops at this mod: the hooks after it, and Claude Code's own handling, never see it.
+
+Avoid the `'*'` wildcard here. It also matches high-frequency events such as `ui.render` (every draw) and `ui.log`, the very call the tracer makes to write each line.
+
 ## Groups
 
 | Group | Count | What they are | Declared in |
