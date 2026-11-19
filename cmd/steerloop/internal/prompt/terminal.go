@@ -33,8 +33,17 @@ func NewTerminal(lines <-chan string, stderr io.Writer) Terminal {
 	}
 }
 
+// Cursor moves (ANSI): up one line, and down one line, each to column 0.
+const (
+	cursorUp   = "\x1b[1A\r"
+	cursorDown = "\x1b[1B\r"
+)
+
 // Next returns the next prompt, or false when the session is over.
 func (t Terminal) Next(ctx context.Context) (string, bool) {
+	if t.isTerminal() {
+		return t.boxed(ctx)
+	}
 	fmt.Fprintln(t.stderr, t.line())
 	for {
 		fmt.Fprint(t.stderr, t.caret.Render("❯")+" ")
@@ -54,11 +63,53 @@ func (t Terminal) Next(ctx context.Context) (string, bool) {
 	}
 }
 
+// boxed is Next on a terminal: both rules are drawn before typing starts, and
+// the cursor goes back up between them. Enter leaves the cursor on the bottom
+// rule, so a typed line steps past it and an empty one goes back up again.
+// A line longer than the terminal wraps onto the bottom rule.
+func (t Terminal) boxed(ctx context.Context) (string, bool) {
+	fmt.Fprintln(t.stderr, t.line())
+	fmt.Fprintln(t.stderr)
+	fmt.Fprint(t.stderr, t.line()+cursorUp)
+	for {
+		fmt.Fprint(t.stderr, t.caret.Render("❯")+" ")
+		select {
+		case <-ctx.Done():
+			fmt.Fprint(t.stderr, cursorDown+"\n") // leave the box
+			return "", false
+		case line, ok := <-t.lines:
+			if !ok {
+				fmt.Fprint(t.stderr, cursorDown+"\n")
+				return "", false
+			}
+			if text := strings.TrimSpace(line); text != "" {
+				fmt.Fprintln(t.stderr)
+				return text, true
+			}
+			fmt.Fprint(t.stderr, cursorUp)
+		}
+	}
+}
+
+// fd is stderr's file descriptor, when it has one.
+func (t Terminal) fd() (uintptr, bool) {
+	f, ok := t.stderr.(interface{ Fd() uintptr })
+	if !ok {
+		return 0, false
+	}
+	return f.Fd(), true
+}
+
+func (t Terminal) isTerminal() bool {
+	fd, ok := t.fd()
+	return ok && term.IsTerminal(fd)
+}
+
 // line is a faint rule as wide as stderr, read each time so a resize shows.
 func (t Terminal) line() string {
 	width := defaultWidth
-	if f, ok := t.stderr.(interface{ Fd() uintptr }); ok {
-		if w, _, err := term.GetSize(f.Fd()); err == nil && w > 0 {
+	if fd, ok := t.fd(); ok {
+		if w, _, err := term.GetSize(fd); err == nil && w > 0 {
 			width = w
 		}
 	}
